@@ -1,4 +1,5 @@
 import { addDays, addHours, addMonths, addWeeks } from 'date-fns';
+import { tz } from '@date-fns/tz';
 import type { CheckinCadence, GraceConfig, WarningStep } from './db/schema.js';
 
 /**
@@ -17,18 +18,28 @@ import type { CheckinCadence, GraceConfig, WarningStep } from './db/schema.js';
 
 export const MIN_GRACE_HOURS = 48;
 
-/** The check-in deadline for a given check-in instant (calendar-aware via date-fns). */
-export function computeNextDeadline(from: Date, cadence: CheckinCadence): Date {
+/**
+ * The check-in deadline for a given check-in instant. Calendar-aware via date-fns:
+ * "1 month" steps the calendar in the switch's own IANA `zone` (same wall-clock
+ * time, month-end clamping, DST-safe); a legacy switch without a zone steps in the
+ * process zone, exactly as before switches carried one. Grace and warning offsets
+ * stay exact hour durations (the 48h floor is a duration, not a calendar step).
+ */
+export function computeNextDeadline(from: Date, cadence: CheckinCadence, zone?: string | null): Date {
+    const opts = zone ? { in: tz(zone) } : undefined;
+    let next: Date;
     switch (cadence.unit) {
-        case 'day':
-            return addDays(from, cadence.value);
         case 'week':
-            return addWeeks(from, cadence.value);
+            next = addWeeks(from, cadence.value, opts);
+            break;
         case 'month':
-            return addMonths(from, cadence.value);
+            next = addMonths(from, cadence.value, opts);
+            break;
+        case 'day':
         default:
-            return addDays(from, cadence.value);
+            next = addDays(from, cadence.value, opts);
     }
+    return new Date(next.getTime());
 }
 
 /** Configured grace expressed in hours (before applying the floor). */

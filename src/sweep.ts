@@ -1,6 +1,6 @@
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { and, eq, gt, inArray, lte, or } from 'drizzle-orm';
+import { and, eq, gt, inArray, lte, or, sql } from 'drizzle-orm';
 import { db, pool } from './db/client.js';
 import {
     publicPages,
@@ -11,6 +11,7 @@ import {
     switchRecipients,
     switches,
     type SwitchRow,
+    type SwitchState,
     type WarnChannel,
 } from './db/schema.js';
 import { env } from './env.js';
@@ -19,17 +20,21 @@ import { getOrCreateReleaseToken, publishPublicPage } from './service.js';
 import { dueWarnings, graceEndsAt } from './logic.js';
 
 /**
- * Lastward sweep — the SERVER-AUTHORITATIVE fire engine. For every switch past its
+ * Quietletter sweep — the SERVER-AUTHORITATIVE fire engine. For every switch past its
  * check-in deadline: transition active → grace, escalate the due warnings to the
  * owner, and once the grace window elapses FIRE — publish any public pages, deliver
  * to every recipient, and mark the switch fired. Idempotent: each delivery is
- * claimed in `lastward_switch_deliveries` (unique per switch+kind+step) before
+ * claimed in `quietletter_switch_deliveries` (unique per switch+kind+step) before
  * acting; a failed FIRE delivery releases its claim so a later sweep retries. Also
  * purges expired release tokens and the payloads of switches fired past retention.
  *
  * CHANNELS: email is sent via nodemailer (console fallback without SMTP). Push/SMS
  * are console-only — the core ships no OneSignal/Twilio. Owner warning emails go to
  * OWNER_EMAIL when set.
+ *
+ * Every state change is a compare-and-set against the row the sweep READ (see
+ * `transitionSwitch`): a check-in, disarm or edit that lands between the read and the
+ * write wins, so a switch the owner just touched is never moved to grace or fired.
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -56,6 +61,35 @@ async function claim(switchId: string, kind: 'warning' | 'fire', stepKey: string
         })
         .returning({ id: switchDeliveries.id });
     return res[0]?.id ?? null;
+}
+
+/**
+ * Compare-and-set a state change. It applies only while the switch is still in one of
+ * `from` with the deadline and grace the sweep read — a check-in moves the deadline, a
+ * disarm changes the state, an edit may change either — so the owner's latest action
+ * always wins and the next sweep re-evaluates fresh state. The deadline is compared at
+ * millisecond precision (what a JS `Date` holds; Postgres keeps microseconds). Returns
+ * whether this call made the change (false also when an overlapping sweep got there first).
+ * Exported for the sweep tests.
+ */
+export async function transitionSwitch(
+    row: Pick<SwitchRow, 'id' | 'nextDeadline' | 'grace'>,
+    from: SwitchState[],
+    set: Partial<typeof switches.$inferInsert>,
+): Promise<boolean> {
+    const changed = await db
+        .update(switches)
+        .set(set)
+        .where(
+            and(
+                eq(switches.id, row.id),
+                inArray(switches.state, from),
+                sql`date_trunc('milliseconds', ${switches.nextDeadline}) = ${row.nextDeadline.toISOString()}::timestamptz`,
+                sql`${switches.grace} = ${JSON.stringify(row.grace)}::jsonb`,
+            ),
+        )
+        .returning({ id: switches.id });
+    return changed.length > 0;
 }
 
 /** Release a claim so a later sweep retries it (used only for failed FIRE deliveries). */
@@ -102,10 +136,16 @@ export async function runSweep(now: Date = new Date()): Promise<SweepResult> {
 
         // active → grace transition once the deadline is crossed.
         if (row.state === 'active' && now >= row.nextDeadline) {
-            await db
-                .update(switches)
-                .set({ state: 'grace', armedAt: row.armedAt ?? now, updatedAt: new Date() })
-                .where(eq(switches.id, row.id));
+            const moved = await transitionSwitch(row, ['active'], {
+                state: 'grace',
+                armedAt: row.armedAt ?? now,
+                updatedAt: new Date(),
+            });
+            if (!moved) {
+                result.skipped++; // checked in / disarmed / edited since the read — next sweep decides
+                continue;
+            }
+            row.state = 'grace';
         }
 
         if (now >= graceEnd) {
@@ -139,7 +179,15 @@ async function sendWarning(row: SwitchRow, channels: WarnChannel[], firesAt: Dat
     }
     if (channels.includes('email')) {
         if (env.OWNER_EMAIL) {
-            jobs.push(sendWarningEmail(env.OWNER_EMAIL, { title: row.title, firesAt, checkinUrl: env.PUBLIC_URL }));
+            jobs.push(
+                sendWarningEmail(env.OWNER_EMAIL, {
+                    title: row.title,
+                    firesAt,
+                    timeZone: row.timezone,
+                    locale: row.locale,
+                    checkinUrl: env.PUBLIC_URL,
+                }),
+            );
         } else {
             // eslint-disable-next-line no-console
             console.log(`[sweep:email] owner warning for "${row.title}" — set OWNER_EMAIL to deliver it`);
@@ -159,13 +207,23 @@ async function sendWarning(row: SwitchRow, channels: WarnChannel[], firesAt: Dat
     }
 }
 
-/** Fire the switch: mark fired (once), publish public pages, deliver to recipients idempotently. */
+/**
+ * Fire the switch: mark it fired (compare-and-set — only if the owner hasn't touched it
+ * since the read and no overlapping sweep fired it first), publish public pages, then
+ * deliver to recipients idempotently. An already-fired row only republishes/retries.
+ */
 async function fire(row: SwitchRow, now: Date, result: SweepResult): Promise<void> {
     if (row.state !== 'fired') {
-        await db
-            .update(switches)
-            .set({ state: 'fired', firedAt: now, armedAt: row.armedAt ?? now, updatedAt: new Date() })
-            .where(eq(switches.id, row.id));
+        const won = await transitionSwitch(row, ['active', 'grace'], {
+            state: 'fired',
+            firedAt: now,
+            armedAt: row.armedAt ?? now,
+            updatedAt: new Date(),
+        });
+        if (!won) {
+            result.skipped++;
+            return;
+        }
         result.fired++;
     }
 
@@ -226,6 +284,7 @@ async function fire(row: SwitchRow, now: Date, result: SweepResult): Promise<voi
                 readableMessages,
                 releaseUrl,
                 publicUrls,
+                locale: row.locale,
             });
             ok = true;
         } catch (err) {

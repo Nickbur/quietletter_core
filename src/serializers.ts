@@ -21,6 +21,8 @@ export function switchDTO(s: SwitchWithChildren): Record<string, unknown> {
         grace: s.grace,
         warnings: s.warnings,
         warningPhone: s.warningPhone ?? null,
+        timezone: s.timezone ?? null,
+        locale: s.locale ?? null,
         lastCheckinAt: toIso(s.lastCheckinAt),
         nextDeadline: toIso(s.nextDeadline),
         armedAt: toIso(s.armedAt),

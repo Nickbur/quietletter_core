@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { z } from 'zod';
 
 /**
- * Validated runtime configuration for the Lastward continuity core.
+ * Validated runtime configuration for the Quietletter continuity core.
  *
  * This is a SINGLE-TENANT, self-hostable server: there are no users, projects,
  * client ids, or entitlements — the one bootstrapped owner authenticates with a
@@ -53,6 +53,15 @@ const schema = z.object({
         .default('http://localhost:8080')
         .transform((u) => u.replace(/\/+$/, '')),
 
+    /**
+     * Footer links on the public pages (release, public page, not-found): the user guide
+     * and the legal documents. They default to Quietletter's own; an operator running an
+     * instance for other people points PRIVACY_URL / TERMS_URL at their own documents.
+     */
+    DOCS_URL: z.string().url().default('https://docs.burakov.net/quietletter'),
+    PRIVACY_URL: z.string().url().default('https://burakov.net/projects/quietletter/privacy'),
+    TERMS_URL: z.string().url().default('https://burakov.net/projects/quietletter/terms'),
+
     /** In-process sweep cadence in seconds. 0 disables the interval (use cron instead). */
     SWEEP_INTERVAL_SECONDS: z.coerce.number().int().nonnegative().max(86_400).default(60),
 
@@ -77,7 +86,7 @@ const schema = z.object({
     SMTP_SECURE: boolEnv(false),
     SMTP_USER: z.string().optional(),
     SMTP_PASS: z.string().optional(),
-    MAIL_FROM: z.string().default('Lastward <no-reply@lastward.local>'),
+    MAIL_FROM: z.string().default('Quietletter <no-reply@quietletter.local>'),
 });
 
 const parsed = schema.safeParse(process.env);

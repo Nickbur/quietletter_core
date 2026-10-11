@@ -6,10 +6,10 @@
  *     items it offers an in-browser reference decryptor (the server never sees the
  *     passphrase or plaintext).
  *
- * REFERENCE CRYPTO ENVELOPE (see README): the bundled decryptor understands
- * `algo = "xchacha20poly1305-argon2id-v1"`:
+ * REFERENCE CRYPTO ENVELOPE (the Quietletter app's; documented in the public operator
+ * guide): the bundled decryptor understands `algo = "xchacha20poly1305-argon2id-v1"`:
  *   KEK        = crypto_pwhash(32, passphrase, salt, INTERACTIVE, INTERACTIVE, ARGON2ID13)
- *   contentKey = crypto_secretbox_open(wrappedKey[24:], wrappedKey[:24], KEK)
+ *   contentKey = crypto_aead_xchacha20poly1305_ietf_decrypt(wrappedKey[24:], wrappedKey[:24], KEK)
  *   plaintext  = crypto_aead_xchacha20poly1305_ietf_decrypt(ciphertext, nonce, contentKey)
  * with salt / wrappedKey / nonce / ciphertext all base64. A client using a
  * different envelope should point its own UI at the JSON endpoint instead — the
@@ -45,15 +45,33 @@ const BASE_STYLE = `
     .muted { color: #6b7280; font-size: 0.85rem; }
     .err { color: #b91c1c; font-size: 0.9rem; }
     a.dl { display: inline-block; margin-top: 8px; }
+    .foot { margin-top: 40px; color: #6b7280; font-size: 0.8rem; }
+    .foot a { color: inherit; }
     @media (prefers-color-scheme: dark) {
         body { color: #e5e7eb; background: #0b0b0c; }
         .content, .action { background: #141416; border-color: #2a2a2e; }
-        .meta, .muted, .tag { color: #9ca3af; }
+        .meta, .muted, .tag, .foot { color: #9ca3af; }
         input[type=password] { background: #1c1c1f; border-color: #3a3a40; color: #e5e7eb; }
     }
 `;
 
-function doc(title: string, body: string, opts: { index: boolean }): string {
+/** Footer links on every public page: the user guide and the instance's legal documents. */
+export interface PageLinks {
+    docs: string;
+    privacy: string;
+    terms: string;
+}
+
+function footer(links?: PageLinks): string {
+    if (!links) return '';
+    return (
+        `<footer class="foot"><a href="${escapeHtml(links.docs)}">Docs</a> · ` +
+        `<a href="${escapeHtml(links.privacy)}">Privacy</a> · ` +
+        `<a href="${escapeHtml(links.terms)}">Terms</a></footer>`
+    );
+}
+
+function doc(title: string, body: string, opts: { index: boolean; links?: PageLinks }): string {
     const robots = opts.index ? '' : '<meta name="robots" content="noindex,nofollow">';
     return `<!doctype html>
 <html lang="en">
@@ -66,22 +84,46 @@ ${robots}
 </head>
 <body>
 ${body}
+${footer(opts.links)}
 </body>
 </html>`;
 }
 
-/** The truly-public "leak" page. Indexable plaintext — this is the self-host-only action. */
-export function renderPublicPage(page: { title: string; content: string; publishedAt: Date }): string {
+/**
+ * `Intl` options for a time shown on a page, in the reader's own zone, naming it
+ * ("August 5, 2026 at 9:00 AM GMT+3") — a JS object literal for the page scripts.
+ */
+const LOCAL_TIME_JS =
+    "{ year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }";
+
+/**
+ * The truly-public "leak" page. Indexable plaintext — this is the self-host-only action.
+ * The publish time is server-rendered in UTC (crawlers, no-JS readers) and switched to
+ * the reader's own local time by a tiny inline script.
+ */
+export function renderPublicPage(
+    page: { title: string; content: string; publishedAt: Date },
+    links?: PageLinks,
+): string {
+    const iso = page.publishedAt.toISOString();
+    const utc = `${new Intl.DateTimeFormat('en-US', { dateStyle: 'long', timeStyle: 'short', timeZone: 'UTC' }).format(
+        page.publishedAt,
+    )} UTC`;
     const body =
         `<h1>${escapeHtml(page.title)}</h1>` +
-        `<p class="meta">Published ${escapeHtml(page.publishedAt.toUTCString())} via Lastward.</p>` +
-        `<div class="content">${escapeHtml(page.content)}</div>`;
-    return doc(page.title, body, { index: true });
+        `<p class="meta">Published <time datetime="${iso}">${escapeHtml(utc)}</time> via Quietletter.</p>` +
+        `<div class="content">${escapeHtml(page.content)}</div>` +
+        `<script>(function () {
+    var el = document.querySelector('time[datetime]');
+    var d = el && new Date(el.getAttribute('datetime'));
+    if (d && !isNaN(d.getTime())) el.textContent = d.toLocaleString('en-US', ${LOCAL_TIME_JS});
+})();</script>`;
+    return doc(page.title, body, { index: true, links });
 }
 
 /** Simple 404 page for an unknown public slug. */
-export function renderNotFoundPage(message: string): string {
-    return doc('Not found', `<h1>Not found</h1><p class="muted">${escapeHtml(message)}</p>`, { index: false });
+export function renderNotFoundPage(message: string, links?: PageLinks): string {
+    return doc('Not found', `<h1>Not found</h1><p class="muted">${escapeHtml(message)}</p>`, { index: false, links });
 }
 
 /**
@@ -89,17 +131,20 @@ export function renderNotFoundPage(message: string): string {
  * `/v1/release/:token` and renders it; readable items show immediately, ZK items
  * get a passphrase box + reference decryptor. Noindex — release links are private.
  */
-export function renderReleasePage(token: string): string {
+export function renderReleasePage(token: string, links?: PageLinks): string {
     // Encode the token for safe interpolation into a JS string literal.
     const jsToken = JSON.stringify(token);
     const body = `
 <h1 id="title">Release</h1>
 <p class="meta" id="meta"></p>
 <div id="root"><p class="muted">Loading…</p></div>
-<script src="https://cdn.jsdelivr.net/npm/libsodium-wrappers-sumo@0.7.15/dist/modules-sumo/libsodium-wrappers.js"></script>
+<!-- Served by this instance (no CDN). The wrappers read the "libsodium" global, so the core library loads first. -->
+<script src="/vendor/libsodium-sumo.js"></script>
+<script src="/vendor/libsodium-wrappers.js"></script>
 <script>
 (function () {
     var TOKEN = ${jsToken};
+    var LOCAL_TIME = ${LOCAL_TIME_JS};
     var REF_ALGO = 'xchacha20poly1305-argon2id-v1';
     var root = document.getElementById('root');
 
@@ -115,15 +160,15 @@ export function renderReleasePage(token: string): string {
     async function decrypt(p, passphrase) {
         await sodium.ready;
         if (p.algo !== REF_ALGO) {
-            throw new Error('This page decrypts the "' + REF_ALGO + '" envelope. This item uses "' + (p.algo || 'unknown') + '" — use your Lastward client.');
+            throw new Error('This page decrypts the "' + REF_ALGO + '" envelope. This item uses "' + (p.algo || 'unknown') + '" — use your Quietletter client.');
         }
         var salt = b64(p.salt), wrapped = b64(p.wrappedKey), nonce = b64(p.nonce), ct = b64(p.ciphertext);
         var kek = sodium.crypto_pwhash(32, passphrase, salt,
             sodium.crypto_pwhash_OPSLIMIT_INTERACTIVE, sodium.crypto_pwhash_MEMLIMIT_INTERACTIVE,
             sodium.crypto_pwhash_ALG_ARGON2ID13);
-        var wnonce = wrapped.slice(0, sodium.crypto_secretbox_NONCEBYTES);
-        var wbox = wrapped.slice(sodium.crypto_secretbox_NONCEBYTES);
-        var contentKey = sodium.crypto_secretbox_open_easy(wbox, wnonce, kek);
+        // The content key is wrapped with the same AEAD as the content: a 24-byte nonce prefix + the sealed key.
+        var npub = sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES;
+        var contentKey = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(null, wrapped.slice(npub), null, wrapped.slice(0, npub), kek);
         return sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(null, ct, null, nonce, contentKey);
     }
 
@@ -176,7 +221,7 @@ export function renderReleasePage(token: string): string {
             document.getElementById('title').textContent = bundle.switchTitle || 'Release';
             var m = [];
             if (bundle.recipientName) m.push('For ' + bundle.recipientName);
-            if (bundle.firedAt) m.push('Released ' + new Date(bundle.firedAt).toUTCString());
+            if (bundle.firedAt) m.push('Released ' + new Date(bundle.firedAt).toLocaleString('en-US', LOCAL_TIME));
             document.getElementById('meta').textContent = m.join(' · ');
             root.innerHTML = '';
             var actions = bundle.actions || [];
@@ -188,5 +233,5 @@ export function renderReleasePage(token: string): string {
         });
 })();
 </script>`;
-    return doc('Release', body, { index: false });
+    return doc('Release', body, { index: false, links });
 }

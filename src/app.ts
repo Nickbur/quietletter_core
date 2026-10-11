@@ -76,7 +76,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
     registerErrorHandler(app);
 
-    // Browser clients (the Lastward app in self-host mode, or any web client) call
+    // Browser clients (the Quietletter app in self-host mode, or any web client) call
     // the owner API with PUT/DELETE + custom headers, so CORS must allow the full
     // method set explicitly — the default only covers the "simple" GET/HEAD/POST.
     await app.register(cors, {

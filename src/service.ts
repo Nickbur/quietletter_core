@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { db } from './db/client.js';
 import {
     defaultCadence,
@@ -17,10 +17,22 @@ import {
     type SwitchRecipientRow,
     type SwitchRow,
 } from './db/schema.js';
-import { NotFoundError } from './shared/errors.js';
+import { ConflictError, NotFoundError } from './shared/errors.js';
 import { uuidv7 } from './shared/id.js';
+import { isUniqueViolation } from './shared/pgErrors.js';
 import { computeNextDeadline } from './logic.js';
-import type { CreateSwitchInput, PutPayloadInput } from './schemas.js';
+import type { CreateSwitchInput, PutPayloadInput, RegionalInput } from './schemas.js';
+import {
+    buildExportFile,
+    candidateIds,
+    checkImportSwitches,
+    importReport,
+    parseExportFile,
+    planImport,
+    type ExportFile,
+    type ImportPlan,
+    type ImportReport,
+} from './transfer.js';
 
 /**
  * SINGLE-TENANT service: every switch belongs to the one bootstrapped owner, so
@@ -95,6 +107,9 @@ export async function upsertSwitch(
 
     const existing = await db.query.switches.findFirst({ where: eq(switches.id, id) });
     const created = !existing;
+    // A sent zone / language replaces the stored one; an older app build omits them and keeps them.
+    const timezone = input.timezone || existing?.timezone || null;
+    const locale = input.locale || existing?.locale || null;
 
     await db.transaction(async (tx) => {
         if (existing) {
@@ -106,7 +121,9 @@ export async function upsertSwitch(
                     grace,
                     warnings,
                     warningPhone: input.warningPhone ?? null,
-                    nextDeadline: computeNextDeadline(existing.lastCheckinAt, cadence),
+                    timezone,
+                    locale,
+                    nextDeadline: computeNextDeadline(existing.lastCheckinAt, cadence, timezone),
                     updatedAt: new Date(),
                 })
                 .where(eq(switches.id, id));
@@ -120,8 +137,10 @@ export async function upsertSwitch(
                 grace,
                 warnings,
                 warningPhone: input.warningPhone ?? null,
+                timezone,
+                locale,
                 lastCheckinAt: now,
-                nextDeadline: computeNextDeadline(now, cadence),
+                nextDeadline: computeNextDeadline(now, cadence, timezone),
                 armedAt: now,
                 createdAt: now,
                 updatedAt: now,
@@ -196,16 +215,14 @@ async function replaceActions(tx: Tx, switchId: string, incoming: CreateSwitchIn
 export async function checkinSwitch(id: string): Promise<SwitchWithChildren> {
     const row = await db.query.switches.findFirst({ where: eq(switches.id, id) });
     if (!row) throw new NotFoundError('switch_not_found');
-    if (row.state === 'fired') {
-        throw new NotFoundError('already_fired'); // 404-style; a fired switch is terminal
-    }
+    if (row.state === 'fired') throw new ConflictError('already_fired', 'a fired switch cannot be checked in');
 
     const now = new Date();
     await db
         .update(switches)
         .set({
             lastCheckinAt: now,
-            nextDeadline: computeNextDeadline(now, row.cadence),
+            nextDeadline: computeNextDeadline(now, row.cadence, row.timezone),
             state: 'active',
             armedAt: row.armedAt ?? now,
             disarmedAt: null,
@@ -218,16 +235,46 @@ export async function checkinSwitch(id: string): Promise<SwitchWithChildren> {
     return updated;
 }
 
-/** Turn a switch off (won't fire). Reversible via check-in. */
+/** Turn a switch off (won't fire). Reversible via check-in. A fired switch is terminal. */
 export async function disarmSwitch(id: string): Promise<SwitchWithChildren> {
     const row = await db.query.switches.findFirst({ where: eq(switches.id, id) });
     if (!row) throw new NotFoundError('switch_not_found');
+    if (row.state === 'fired') throw new ConflictError('already_fired', 'a fired switch cannot be disarmed');
 
     const now = new Date();
     await db.update(switches).set({ state: 'disarmed', disarmedAt: now, updatedAt: now }).where(eq(switches.id, id));
 
     const updated = await getSwitch(id);
     if (!updated) throw new Error('disarm_failed');
+    return updated;
+}
+
+/**
+ * Fills in the zone and language of a switch saved before switches carried them (the
+ * app sends its device's once, after loading the list). Only missing values are
+ * written — what a switch already has stays — and nothing else moves: the current
+ * cycle keeps its deadline (the zone applies from the next check-in or edit) and a
+ * fired switch is left alone. Idempotent.
+ */
+export async function fillSwitchRegional(id: string, input: RegionalInput): Promise<SwitchWithChildren> {
+    const row = await db.query.switches.findFirst({ where: eq(switches.id, id) });
+    if (!row) throw new NotFoundError('switch_not_found');
+    if (row.state !== 'fired') {
+        if (!row.timezone) {
+            await db
+                .update(switches)
+                .set({ timezone: input.timezone })
+                .where(and(eq(switches.id, id), isNull(switches.timezone)));
+        }
+        if (!row.locale && input.locale) {
+            await db
+                .update(switches)
+                .set({ locale: input.locale })
+                .where(and(eq(switches.id, id), isNull(switches.locale)));
+        }
+    }
+    const updated = await getSwitch(id);
+    if (!updated) throw new Error('regional_fill_failed');
     return updated;
 }
 
@@ -280,6 +327,151 @@ export async function putPayload(
         .returning();
     if (!row) throw new Error('payload_upsert_failed');
     return row;
+}
+
+// --- Export / import (see transfer.ts) ----------------------------------------
+
+/** All live (non-fired) switches as a portable export file, payloads included. */
+export async function exportSwitches(now: Date = new Date()): Promise<ExportFile> {
+    const rows = await db.query.switches.findMany({
+        where: ne(switches.state, 'fired'),
+        orderBy: [asc(switches.createdAt)],
+    });
+    const full = await withChildren(rows);
+    const payloads = rows.length
+        ? await db.query.switchPayloads.findMany({
+              where: inArray(
+                  switchPayloads.switchId,
+                  rows.map((r) => r.id),
+              ),
+          })
+        : [];
+    return buildExportFile(full, payloads, 'self-host', now);
+}
+
+/**
+ * Validate an uploaded export file and decide, per switch, what an import would do.
+ * Read-only. Self-host is unlimited and accepts the `public_page` action, so the only
+ * skips are ids already here and invalid switches.
+ */
+export async function planSwitchImport(body: unknown): Promise<ImportPlan> {
+    const file = parseExportFile(body);
+    const checks = checkImportSwitches(file.switches, { allowPublicPage: true });
+
+    const switchIds: string[] = [];
+    const childIds: string[] = [];
+    for (const check of checks) {
+        if (!check.ok) continue;
+        const ids = candidateIds(check.candidate);
+        switchIds.push(ids.switchId);
+        childIds.push(...ids.childIds);
+    }
+
+    const [existing, takenRecipients, takenActions] = await Promise.all([
+        switchIds.length
+            ? db.query.switches.findMany({ where: inArray(switches.id, switchIds), columns: { id: true } })
+            : [],
+        childIds.length
+            ? db.query.switchRecipients.findMany({
+                  where: inArray(switchRecipients.id, childIds),
+                  columns: { id: true },
+              })
+            : [],
+        childIds.length
+            ? db.query.switchActions.findMany({ where: inArray(switchActions.id, childIds), columns: { id: true } })
+            : [],
+    ]);
+
+    // Single-tenant: every existing switch is the owner's, so there is no "foreign" id.
+    return planImport(checks, {
+        ownSwitchIds: new Set(existing.map((s) => s.id)),
+        foreignSwitchIds: new Set(),
+        takenChildIds: new Set([...takenRecipients, ...takenActions].map((r) => r.id)),
+    });
+}
+
+/**
+ * Write a planned import in ONE transaction (all of `plan.toCreate` or nothing). Each
+ * switch starts a fresh timer from `now` — the import itself is the owner's proof of
+ * life, so nothing can fire early — and a switch exported disarmed stays disarmed.
+ */
+export async function applySwitchImport(plan: ImportPlan, now: Date = new Date()): Promise<ImportReport> {
+    if (plan.toCreate.length > 0) {
+        try {
+            await db.transaction(async (tx) => {
+                for (const c of plan.toCreate) {
+                    const cadence = c.input.cadence ?? defaultCadence();
+                    await tx.insert(switches).values({
+                        id: c.id,
+                        title: c.input.title,
+                        state: c.disarmed ? 'disarmed' : 'active',
+                        cadence,
+                        grace: c.input.grace ?? defaultGrace(),
+                        warnings: c.input.warnings ?? defaultWarnings(),
+                        warningPhone: c.input.warningPhone ?? null,
+                        timezone: c.input.timezone ?? null,
+                        locale: c.input.locale ?? null,
+                        lastCheckinAt: now,
+                        nextDeadline: computeNextDeadline(now, cadence, c.input.timezone),
+                        armedAt: c.disarmed ? null : now,
+                        disarmedAt: c.disarmed ? now : null,
+                        createdAt: c.createdAt ?? now,
+                        updatedAt: now,
+                    });
+                    if (c.input.recipients.length) {
+                        await tx.insert(switchRecipients).values(
+                            c.input.recipients.map((r) => ({
+                                id: r.id ?? uuidv7(),
+                                switchId: c.id,
+                                email: r.email,
+                                phone: r.phone ?? null,
+                                name: r.name ?? null,
+                            })),
+                        );
+                    }
+                    if (c.input.actions.length) {
+                        await tx.insert(switchActions).values(
+                            c.input.actions.map((a) => ({
+                                id: a.id ?? uuidv7(),
+                                switchId: c.id,
+                                type: a.type,
+                                sortOrder: a.sortOrder ?? 0,
+                                config: a.config,
+                            })),
+                        );
+                    }
+                    if (c.payloads.length) {
+                        await tx.insert(switchPayloads).values(
+                            c.payloads.map(({ actionId, payload, schemaVersion }) => ({
+                                switchId: c.id,
+                                actionId,
+                                mode: payload.mode,
+                                ciphertext: payload.ciphertext ?? null,
+                                wrappedKey: payload.wrappedKey ?? null,
+                                salt: payload.salt ?? null,
+                                nonce: payload.nonce ?? null,
+                                algo: payload.algo ?? null,
+                                blobRef: payload.blobRef ?? null,
+                                size: payload.size ?? null,
+                                readableContent: payload.readableContent ?? null,
+                                schemaVersion,
+                            })),
+                        );
+                    }
+                }
+            });
+        } catch (err) {
+            // Another request created one of these ids between the plan and the write.
+            if (isUniqueViolation(err)) {
+                throw new ConflictError(
+                    'import_conflict',
+                    'a switch in this file changed concurrently; retry the import',
+                );
+            }
+            throw err;
+        }
+    }
+    return importReport(plan.results);
 }
 
 // --- Release tokens (public recipient access after fire) ---------------------

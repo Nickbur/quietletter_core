@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { MIN_GRACE_HOURS } from './logic.js';
 import { ValidationError } from './shared/errors.js';
+import { isValidTimeZone } from './shared/timezone.js';
 
 /** Parse a body against a schema, throwing a 400 ValidationError on failure. */
 export function parse<T>(schema: z.ZodType<T>, body: unknown): T {
@@ -14,7 +15,7 @@ export function parse<T>(schema: z.ZodType<T>, body: unknown): T {
 }
 
 /**
- * Request validation. The wire shape mirrors the Lastward client's `Switch` model
+ * Request validation. The wire shape mirrors the Quietletter client's `Switch` model
  * (camelCase) so the same client can talk to this core or the cloud. Safety floors
  * are enforced here as well as in the sweep: grace ≥ 48h, and every switch must
  * warn on at least push + email before it can fire.
@@ -135,12 +136,22 @@ const actionInput = z
         }
     });
 
+/** A UI language code, e.g. `en`, `ru`, `pt-BR`. */
+const localeStr = z
+    .string()
+    .trim()
+    .regex(/^[a-z]{2}(-[A-Za-z]{2})?$/, 'expected a language code');
+
 export const createSwitchSchema = z.object({
     title: z.string().trim().min(1).max(300),
     cadence: cadence.optional(),
     grace: grace.optional(),
     warnings: warnings.optional(),
     warningPhone: phoneStr.nullable().optional().default(null),
+    // The saving device's IANA zone. Absent / null (older app builds) keeps the stored one.
+    timezone: z.string().trim().max(64).refine(isValidTimeZone, { message: 'invalid time zone' }).nullable().optional(),
+    // The saving app's UI language. Absent / null (older app builds) keeps the stored one.
+    locale: localeStr.nullable().optional(),
     recipients: z.array(recipientInput).max(50).optional().default([]),
     actions: z.array(actionInput).max(20).optional().default([]),
 });
@@ -148,6 +159,25 @@ export const createSwitchSchema = z.object({
 export type CreateSwitchInput = z.output<typeof createSwitchSchema>;
 export type RecipientInput = z.output<typeof recipientInput>;
 export type ActionInput = z.output<typeof actionInput>;
+
+/**
+ * `PUT /switches/:id/regional` — the device settings a switch saved before switches
+ * carried them is missing: its zone and the app's UI language. Same contract as the
+ * hosted service (which keeps the language on the owner's account instead).
+ */
+export const regionalSchema = z.object({
+    timezone: z.string().trim().max(64).refine(isValidTimeZone, { message: 'invalid time zone' }),
+    locale: localeStr.optional(),
+});
+
+export type RegionalInput = z.output<typeof regionalSchema>;
+
+/**
+ * Request body cap for `PUT …/payload`. The real limit is the 2,000,000-char ciphertext
+ * cap below (a ~1.12 MB file: the app base64s the file, encrypts it and base64s the
+ * ciphertext); kept identical to the hosted service.
+ */
+export const PAYLOAD_BODY_LIMIT = 3 * 1024 * 1024;
 
 /** Upload/replace the encrypted (or readable) payload for one action. */
 export const putPayloadSchema = z

@@ -3,13 +3,13 @@ services:
         image: postgres:17-alpine
         restart: unless-stopped
         environment:
-            POSTGRES_USER: lastward
-            POSTGRES_PASSWORD: lastward
-            POSTGRES_DB: lastward
+            POSTGRES_USER: quietletter
+            POSTGRES_PASSWORD: quietletter
+            POSTGRES_DB: quietletter
         volumes:
-            - lastward_pgdata:/var/lib/postgresql/data
+            - quietletter_pgdata:/var/lib/postgresql/data
         healthcheck:
-            test: ['CMD-SHELL', 'pg_isready -U lastward -d lastward']
+            test: ['CMD-SHELL', 'pg_isready -U quietletter -d quietletter']
             interval: 5s
             timeout: 5s
             retries: 10
@@ -24,7 +24,7 @@ services:
             # Force the in-container bind + DB host regardless of what .env carries, so
             # the published port mapping below always matches.
             PORT: '8080'
-            DATABASE_URL: 'postgres://lastward:lastward@db:5432/lastward'
+            DATABASE_URL: 'postgres://quietletter:quietletter@db:5432/quietletter'
         depends_on:
             db:
                 condition: service_healthy
@@ -32,4 +32,4 @@ services:
             - '${PORT:-8080}:8080'
 
 volumes:
-    lastward_pgdata:
+    quietletter_pgdata:

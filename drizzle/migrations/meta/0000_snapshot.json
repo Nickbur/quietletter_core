@@ -4,8 +4,8 @@
     "version": "7",
     "dialect": "postgresql",
     "tables": {
-        "public.lastward_public_pages": {
-            "name": "lastward_public_pages",
+        "public.quietletter_public_pages": {
+            "name": "quietletter_public_pages",
             "schema": "",
             "columns": {
                 "slug": {
@@ -47,8 +47,8 @@
                 }
             },
             "indexes": {
-                "lastward_public_pages_switch_idx": {
-                    "name": "lastward_public_pages_switch_idx",
+                "quietletter_public_pages_switch_idx": {
+                    "name": "quietletter_public_pages_switch_idx",
                     "columns": [
                         {
                             "expression": "switch_id",
@@ -62,8 +62,8 @@
                     "method": "btree",
                     "with": {}
                 },
-                "lastward_public_pages_action_uniq": {
-                    "name": "lastward_public_pages_action_uniq",
+                "quietletter_public_pages_action_uniq": {
+                    "name": "quietletter_public_pages_action_uniq",
                     "columns": [
                         {
                             "expression": "action_id",
@@ -79,19 +79,19 @@
                 }
             },
             "foreignKeys": {
-                "lastward_public_pages_switch_id_lastward_switches_id_fk": {
-                    "name": "lastward_public_pages_switch_id_lastward_switches_id_fk",
-                    "tableFrom": "lastward_public_pages",
-                    "tableTo": "lastward_switches",
+                "quietletter_public_pages_switch_id_quietletter_switches_id_fk": {
+                    "name": "quietletter_public_pages_switch_id_quietletter_switches_id_fk",
+                    "tableFrom": "quietletter_public_pages",
+                    "tableTo": "quietletter_switches",
                     "columnsFrom": ["switch_id"],
                     "columnsTo": ["id"],
                     "onDelete": "cascade",
                     "onUpdate": "no action"
                 },
-                "lastward_public_pages_action_id_lastward_switch_actions_id_fk": {
-                    "name": "lastward_public_pages_action_id_lastward_switch_actions_id_fk",
-                    "tableFrom": "lastward_public_pages",
-                    "tableTo": "lastward_switch_actions",
+                "quietletter_public_pages_action_id_quietletter_switch_actions_id_fk": {
+                    "name": "quietletter_public_pages_action_id_quietletter_switch_actions_id_fk",
+                    "tableFrom": "quietletter_public_pages",
+                    "tableTo": "quietletter_switch_actions",
                     "columnsFrom": ["action_id"],
                     "columnsTo": ["id"],
                     "onDelete": "cascade",
@@ -104,8 +104,8 @@
             "checkConstraints": {},
             "isRLSEnabled": false
         },
-        "public.lastward_release_tokens": {
-            "name": "lastward_release_tokens",
+        "public.quietletter_release_tokens": {
+            "name": "quietletter_release_tokens",
             "schema": "",
             "columns": {
                 "token": {
@@ -141,8 +141,8 @@
                 }
             },
             "indexes": {
-                "lastward_release_tokens_switch_idx": {
-                    "name": "lastward_release_tokens_switch_idx",
+                "quietletter_release_tokens_switch_idx": {
+                    "name": "quietletter_release_tokens_switch_idx",
                     "columns": [
                         {
                             "expression": "switch_id",
@@ -158,19 +158,19 @@
                 }
             },
             "foreignKeys": {
-                "lastward_release_tokens_switch_id_lastward_switches_id_fk": {
-                    "name": "lastward_release_tokens_switch_id_lastward_switches_id_fk",
-                    "tableFrom": "lastward_release_tokens",
-                    "tableTo": "lastward_switches",
+                "quietletter_release_tokens_switch_id_quietletter_switches_id_fk": {
+                    "name": "quietletter_release_tokens_switch_id_quietletter_switches_id_fk",
+                    "tableFrom": "quietletter_release_tokens",
+                    "tableTo": "quietletter_switches",
                     "columnsFrom": ["switch_id"],
                     "columnsTo": ["id"],
                     "onDelete": "cascade",
                     "onUpdate": "no action"
                 },
-                "lastward_release_tokens_recipient_id_lastward_switch_recipients_id_fk": {
-                    "name": "lastward_release_tokens_recipient_id_lastward_switch_recipients_id_fk",
-                    "tableFrom": "lastward_release_tokens",
-                    "tableTo": "lastward_switch_recipients",
+                "quietletter_release_tokens_recipient_id_quietletter_switch_recipients_id_fk": {
+                    "name": "quietletter_release_tokens_recipient_id_quietletter_switch_recipients_id_fk",
+                    "tableFrom": "quietletter_release_tokens",
+                    "tableTo": "quietletter_switch_recipients",
                     "columnsFrom": ["recipient_id"],
                     "columnsTo": ["id"],
                     "onDelete": "cascade",
@@ -183,8 +183,8 @@
             "checkConstraints": {},
             "isRLSEnabled": false
         },
-        "public.lastward_switch_actions": {
-            "name": "lastward_switch_actions",
+        "public.quietletter_switch_actions": {
+            "name": "quietletter_switch_actions",
             "schema": "",
             "columns": {
                 "id": {
@@ -234,8 +234,8 @@
                 }
             },
             "indexes": {
-                "lastward_actions_switch_idx": {
-                    "name": "lastward_actions_switch_idx",
+                "quietletter_actions_switch_idx": {
+                    "name": "quietletter_actions_switch_idx",
                     "columns": [
                         {
                             "expression": "switch_id",
@@ -251,10 +251,10 @@
                 }
             },
             "foreignKeys": {
-                "lastward_switch_actions_switch_id_lastward_switches_id_fk": {
-                    "name": "lastward_switch_actions_switch_id_lastward_switches_id_fk",
-                    "tableFrom": "lastward_switch_actions",
-                    "tableTo": "lastward_switches",
+                "quietletter_switch_actions_switch_id_quietletter_switches_id_fk": {
+                    "name": "quietletter_switch_actions_switch_id_quietletter_switches_id_fk",
+                    "tableFrom": "quietletter_switch_actions",
+                    "tableTo": "quietletter_switches",
                     "columnsFrom": ["switch_id"],
                     "columnsTo": ["id"],
                     "onDelete": "cascade",
@@ -267,8 +267,8 @@
             "checkConstraints": {},
             "isRLSEnabled": false
         },
-        "public.lastward_switch_deliveries": {
-            "name": "lastward_switch_deliveries",
+        "public.quietletter_switch_deliveries": {
+            "name": "quietletter_switch_deliveries",
             "schema": "",
             "columns": {
                 "id": {
@@ -304,8 +304,8 @@
                 }
             },
             "indexes": {
-                "lastward_switch_deliveries_unique_idx": {
-                    "name": "lastward_switch_deliveries_unique_idx",
+                "quietletter_switch_deliveries_unique_idx": {
+                    "name": "quietletter_switch_deliveries_unique_idx",
                     "columns": [
                         {
                             "expression": "switch_id",
@@ -333,10 +333,10 @@
                 }
             },
             "foreignKeys": {
-                "lastward_switch_deliveries_switch_id_lastward_switches_id_fk": {
-                    "name": "lastward_switch_deliveries_switch_id_lastward_switches_id_fk",
-                    "tableFrom": "lastward_switch_deliveries",
-                    "tableTo": "lastward_switches",
+                "quietletter_switch_deliveries_switch_id_quietletter_switches_id_fk": {
+                    "name": "quietletter_switch_deliveries_switch_id_quietletter_switches_id_fk",
+                    "tableFrom": "quietletter_switch_deliveries",
+                    "tableTo": "quietletter_switches",
                     "columnsFrom": ["switch_id"],
                     "columnsTo": ["id"],
                     "onDelete": "cascade",
@@ -349,8 +349,8 @@
             "checkConstraints": {},
             "isRLSEnabled": false
         },
-        "public.lastward_switch_payloads": {
-            "name": "lastward_switch_payloads",
+        "public.quietletter_switch_payloads": {
+            "name": "quietletter_switch_payloads",
             "schema": "",
             "columns": {
                 "id": {
@@ -448,8 +448,8 @@
                 }
             },
             "indexes": {
-                "lastward_payloads_switch_idx": {
-                    "name": "lastward_payloads_switch_idx",
+                "quietletter_payloads_switch_idx": {
+                    "name": "quietletter_payloads_switch_idx",
                     "columns": [
                         {
                             "expression": "switch_id",
@@ -463,8 +463,8 @@
                     "method": "btree",
                     "with": {}
                 },
-                "lastward_payloads_action_uniq": {
-                    "name": "lastward_payloads_action_uniq",
+                "quietletter_payloads_action_uniq": {
+                    "name": "quietletter_payloads_action_uniq",
                     "columns": [
                         {
                             "expression": "action_id",
@@ -480,19 +480,19 @@
                 }
             },
             "foreignKeys": {
-                "lastward_switch_payloads_switch_id_lastward_switches_id_fk": {
-                    "name": "lastward_switch_payloads_switch_id_lastward_switches_id_fk",
-                    "tableFrom": "lastward_switch_payloads",
-                    "tableTo": "lastward_switches",
+                "quietletter_switch_payloads_switch_id_quietletter_switches_id_fk": {
+                    "name": "quietletter_switch_payloads_switch_id_quietletter_switches_id_fk",
+                    "tableFrom": "quietletter_switch_payloads",
+                    "tableTo": "quietletter_switches",
                     "columnsFrom": ["switch_id"],
                     "columnsTo": ["id"],
                     "onDelete": "cascade",
                     "onUpdate": "no action"
                 },
-                "lastward_switch_payloads_action_id_lastward_switch_actions_id_fk": {
-                    "name": "lastward_switch_payloads_action_id_lastward_switch_actions_id_fk",
-                    "tableFrom": "lastward_switch_payloads",
-                    "tableTo": "lastward_switch_actions",
+                "quietletter_switch_payloads_action_id_quietletter_switch_actions_id_fk": {
+                    "name": "quietletter_switch_payloads_action_id_quietletter_switch_actions_id_fk",
+                    "tableFrom": "quietletter_switch_payloads",
+                    "tableTo": "quietletter_switch_actions",
                     "columnsFrom": ["action_id"],
                     "columnsTo": ["id"],
                     "onDelete": "cascade",
@@ -505,8 +505,8 @@
             "checkConstraints": {},
             "isRLSEnabled": false
         },
-        "public.lastward_switch_recipients": {
-            "name": "lastward_switch_recipients",
+        "public.quietletter_switch_recipients": {
+            "name": "quietletter_switch_recipients",
             "schema": "",
             "columns": {
                 "id": {
@@ -548,8 +548,8 @@
                 }
             },
             "indexes": {
-                "lastward_recipients_switch_idx": {
-                    "name": "lastward_recipients_switch_idx",
+                "quietletter_recipients_switch_idx": {
+                    "name": "quietletter_recipients_switch_idx",
                     "columns": [
                         {
                             "expression": "switch_id",
@@ -565,10 +565,10 @@
                 }
             },
             "foreignKeys": {
-                "lastward_switch_recipients_switch_id_lastward_switches_id_fk": {
-                    "name": "lastward_switch_recipients_switch_id_lastward_switches_id_fk",
-                    "tableFrom": "lastward_switch_recipients",
-                    "tableTo": "lastward_switches",
+                "quietletter_switch_recipients_switch_id_quietletter_switches_id_fk": {
+                    "name": "quietletter_switch_recipients_switch_id_quietletter_switches_id_fk",
+                    "tableFrom": "quietletter_switch_recipients",
+                    "tableTo": "quietletter_switches",
                     "columnsFrom": ["switch_id"],
                     "columnsTo": ["id"],
                     "onDelete": "cascade",
@@ -581,8 +581,8 @@
             "checkConstraints": {},
             "isRLSEnabled": false
         },
-        "public.lastward_switches": {
-            "name": "lastward_switches",
+        "public.quietletter_switches": {
+            "name": "quietletter_switches",
             "schema": "",
             "columns": {
                 "id": {
@@ -678,8 +678,8 @@
                 }
             },
             "indexes": {
-                "lastward_switches_deadline_idx": {
-                    "name": "lastward_switches_deadline_idx",
+                "quietletter_switches_deadline_idx": {
+                    "name": "quietletter_switches_deadline_idx",
                     "columns": [
                         {
                             "expression": "next_deadline",
@@ -693,8 +693,8 @@
                     "method": "btree",
                     "with": {}
                 },
-                "lastward_switches_state_idx": {
-                    "name": "lastward_switches_state_idx",
+                "quietletter_switches_state_idx": {
+                    "name": "quietletter_switches_state_idx",
                     "columns": [
                         {
                             "expression": "state",

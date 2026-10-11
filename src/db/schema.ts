@@ -2,7 +2,7 @@ import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid, var
 import { uuidv7 } from '../shared/id.js';
 
 /**
- * Lastward continuity core — the AGPL, self-hostable implementation of the
+ * Quietletter continuity core — the AGPL, self-hostable implementation of the
  * zero-knowledge digital dead man's switch. A `switch` fires composable actions
  * (deliver a message, release an encrypted file/secret, publish a private or a
  * truly-public page) when the owner stops "checking in" within a safeguarded
@@ -90,7 +90,7 @@ export function defaultWarnings(): WarningStep[] {
 // --- Tables ------------------------------------------------------------------
 
 export const switches = pgTable(
-    'lastward_switches',
+    'quietletter_switches',
     {
         id: uuid('id').primaryKey().$defaultFn(uuidv7),
 
@@ -107,6 +107,21 @@ export const switches = pgTable(
         /** Optional phone for SMS warnings to the OWNER (console-only in the core). */
         warningPhone: varchar('warning_phone', { length: 32 }),
 
+        /**
+         * IANA zone of the device that last saved the switch: the cadence steps on its
+         * calendar and the warning email shows the fire time on its clock. Null on
+         * switches saved before the column — those step in the process zone and the
+         * email prints UTC.
+         */
+        timezone: varchar('timezone', { length: 64 }),
+
+        /**
+         * UI language of the app that last saved the switch (`en`, `ru`, …): the warning
+         * and the recipients' emails are written in it (Russian for `ru`, else English).
+         * Null on switches saved before the column — English until the app fills it in.
+         */
+        locale: varchar('locale', { length: 16 }),
+
         /** Proof-of-life bookkeeping. `nextDeadline` = lastCheckinAt + cadence (denormalized, indexed). */
         lastCheckinAt: timestamp('last_checkin_at', { withTimezone: true }).defaultNow().notNull(),
         nextDeadline: timestamp('next_deadline', { withTimezone: true }).notNull(),
@@ -119,8 +134,8 @@ export const switches = pgTable(
         updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
     },
     (table) => ({
-        deadlineIdx: index('lastward_switches_deadline_idx').on(table.nextDeadline),
-        stateIdx: index('lastward_switches_state_idx').on(table.state),
+        deadlineIdx: index('quietletter_switches_deadline_idx').on(table.nextDeadline),
+        stateIdx: index('quietletter_switches_state_idx').on(table.state),
     }),
 );
 
@@ -129,7 +144,7 @@ export type NewSwitch = typeof switches.$inferInsert;
 
 /** Recipients of a switch. Server-readable (the address is needed to deliver). */
 export const switchRecipients = pgTable(
-    'lastward_switch_recipients',
+    'quietletter_switch_recipients',
     {
         id: uuid('id').primaryKey().$defaultFn(uuidv7),
         switchId: uuid('switch_id')
@@ -141,7 +156,7 @@ export const switchRecipients = pgTable(
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     },
     (table) => ({
-        switchIdx: index('lastward_recipients_switch_idx').on(table.switchId),
+        switchIdx: index('quietletter_recipients_switch_idx').on(table.switchId),
     }),
 );
 
@@ -149,7 +164,7 @@ export type SwitchRecipientRow = typeof switchRecipients.$inferSelect;
 
 /** The composable actions of a switch (metadata only; the encrypted body is in `switch_payloads`). */
 export const switchActions = pgTable(
-    'lastward_switch_actions',
+    'quietletter_switch_actions',
     {
         id: uuid('id').primaryKey().$defaultFn(uuidv7),
         switchId: uuid('switch_id')
@@ -162,7 +177,7 @@ export const switchActions = pgTable(
         updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
     },
     (table) => ({
-        switchIdx: index('lastward_actions_switch_idx').on(table.switchId),
+        switchIdx: index('quietletter_actions_switch_idx').on(table.switchId),
     }),
 );
 
@@ -175,7 +190,7 @@ export type SwitchActionRow = typeof switchActions.$inferSelect;
  * `readableContent`. Large files are externalized by `blobRef`.
  */
 export const switchPayloads = pgTable(
-    'lastward_switch_payloads',
+    'quietletter_switch_payloads',
     {
         id: uuid('id').primaryKey().$defaultFn(uuidv7),
         switchId: uuid('switch_id')
@@ -205,8 +220,8 @@ export const switchPayloads = pgTable(
         updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
     },
     (table) => ({
-        switchIdx: index('lastward_payloads_switch_idx').on(table.switchId),
-        actionUniq: uniqueIndex('lastward_payloads_action_uniq').on(table.actionId),
+        switchIdx: index('quietletter_payloads_switch_idx').on(table.switchId),
+        actionUniq: uniqueIndex('quietletter_payloads_action_uniq').on(table.actionId),
     }),
 );
 
@@ -217,7 +232,7 @@ export type SwitchPayloadRow = typeof switchPayloads.$inferSelect;
  * payloads on the public release page — no account required. Issued at fire time.
  */
 export const releaseTokens = pgTable(
-    'lastward_release_tokens',
+    'quietletter_release_tokens',
     {
         token: varchar('token', { length: 64 }).primaryKey(),
         switchId: uuid('switch_id')
@@ -230,7 +245,7 @@ export const releaseTokens = pgTable(
         createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     },
     (table) => ({
-        switchIdx: index('lastward_release_tokens_switch_idx').on(table.switchId),
+        switchIdx: index('quietletter_release_tokens_switch_idx').on(table.switchId),
     }),
 );
 
@@ -243,7 +258,7 @@ export type ReleaseTokenRow = typeof releaseTokens.$inferSelect;
  * subject to the retention purge — a published leak is meant to stay up.
  */
 export const publicPages = pgTable(
-    'lastward_public_pages',
+    'quietletter_public_pages',
     {
         slug: varchar('slug', { length: 128 }).primaryKey(),
         switchId: uuid('switch_id')
@@ -258,8 +273,8 @@ export const publicPages = pgTable(
         publishedAt: timestamp('published_at', { withTimezone: true }).defaultNow().notNull(),
     },
     (table) => ({
-        switchIdx: index('lastward_public_pages_switch_idx').on(table.switchId),
-        actionUniq: uniqueIndex('lastward_public_pages_action_uniq').on(table.actionId),
+        switchIdx: index('quietletter_public_pages_switch_idx').on(table.switchId),
+        actionUniq: uniqueIndex('quietletter_public_pages_action_uniq').on(table.actionId),
     }),
 );
 
@@ -271,11 +286,12 @@ export type PublicPageRow = typeof publicPages.$inferSelect;
  * inserts-or-skips instead of re-sending.
  *   - kind `warning` → stepKey `<nextDeadline ISO>:<warningIndex>` (a new check-in
  *     cycle gets a new deadline anchor, so next cycle's warnings can fire again).
- *   - kind `fire`    → stepKey `<recipientId>` (fire once per recipient) or
- *                      `page:<actionId>` (publish each public page once).
+ *   - kind `fire`    → stepKey `<recipientId>` (fire once per recipient).
+ * Public pages are not in this ledger: `quietletter_public_pages` has one row per
+ * action (unique `action_id`), which is what makes publishing idempotent.
  */
 export const switchDeliveries = pgTable(
-    'lastward_switch_deliveries',
+    'quietletter_switch_deliveries',
     {
         id: uuid('id').primaryKey().$defaultFn(uuidv7),
         switchId: uuid('switch_id')
@@ -286,7 +302,7 @@ export const switchDeliveries = pgTable(
         sentAt: timestamp('sent_at', { withTimezone: true }).defaultNow().notNull(),
     },
     (table) => ({
-        uniqSend: uniqueIndex('lastward_switch_deliveries_unique_idx').on(table.switchId, table.kind, table.stepKey),
+        uniqSend: uniqueIndex('quietletter_switch_deliveries_unique_idx').on(table.switchId, table.kind, table.stepKey),
     }),
 );
 

@@ -1,4 +1,4 @@
-CREATE TABLE "lastward_public_pages" (
+CREATE TABLE "quietletter_public_pages" (
     "slug" varchar(128) PRIMARY KEY NOT NULL,
     "switch_id" uuid NOT NULL,
     "action_id" uuid NOT NULL,
@@ -7,7 +7,7 @@ CREATE TABLE "lastward_public_pages" (
     "published_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "lastward_release_tokens" (
+CREATE TABLE "quietletter_release_tokens" (
     "token" varchar(64) PRIMARY KEY NOT NULL,
     "switch_id" uuid NOT NULL,
     "recipient_id" uuid NOT NULL,
@@ -15,7 +15,7 @@ CREATE TABLE "lastward_release_tokens" (
     "created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "lastward_switch_actions" (
+CREATE TABLE "quietletter_switch_actions" (
     "id" uuid PRIMARY KEY NOT NULL,
     "switch_id" uuid NOT NULL,
     "type" varchar(24) NOT NULL,
@@ -25,7 +25,7 @@ CREATE TABLE "lastward_switch_actions" (
     "updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "lastward_switch_deliveries" (
+CREATE TABLE "quietletter_switch_deliveries" (
     "id" uuid PRIMARY KEY NOT NULL,
     "switch_id" uuid NOT NULL,
     "kind" varchar(12) NOT NULL,
@@ -33,7 +33,7 @@ CREATE TABLE "lastward_switch_deliveries" (
     "sent_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "lastward_switch_payloads" (
+CREATE TABLE "quietletter_switch_payloads" (
     "id" uuid PRIMARY KEY NOT NULL,
     "switch_id" uuid NOT NULL,
     "action_id" uuid NOT NULL,
@@ -51,7 +51,7 @@ CREATE TABLE "lastward_switch_payloads" (
     "updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "lastward_switch_recipients" (
+CREATE TABLE "quietletter_switch_recipients" (
     "id" uuid PRIMARY KEY NOT NULL,
     "switch_id" uuid NOT NULL,
     "email" varchar(320) NOT NULL,
@@ -60,7 +60,7 @@ CREATE TABLE "lastward_switch_recipients" (
     "created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "lastward_switches" (
+CREATE TABLE "quietletter_switches" (
     "id" uuid PRIMARY KEY NOT NULL,
     "title" varchar(300) NOT NULL,
     "state" varchar(16) DEFAULT 'active' NOT NULL,
@@ -77,22 +77,22 @@ CREATE TABLE "lastward_switches" (
     "updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "lastward_public_pages" ADD CONSTRAINT "lastward_public_pages_switch_id_lastward_switches_id_fk" FOREIGN KEY ("switch_id") REFERENCES "public"."lastward_switches"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "lastward_public_pages" ADD CONSTRAINT "lastward_public_pages_action_id_lastward_switch_actions_id_fk" FOREIGN KEY ("action_id") REFERENCES "public"."lastward_switch_actions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "lastward_release_tokens" ADD CONSTRAINT "lastward_release_tokens_switch_id_lastward_switches_id_fk" FOREIGN KEY ("switch_id") REFERENCES "public"."lastward_switches"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "lastward_release_tokens" ADD CONSTRAINT "lastward_release_tokens_recipient_id_lastward_switch_recipients_id_fk" FOREIGN KEY ("recipient_id") REFERENCES "public"."lastward_switch_recipients"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "lastward_switch_actions" ADD CONSTRAINT "lastward_switch_actions_switch_id_lastward_switches_id_fk" FOREIGN KEY ("switch_id") REFERENCES "public"."lastward_switches"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "lastward_switch_deliveries" ADD CONSTRAINT "lastward_switch_deliveries_switch_id_lastward_switches_id_fk" FOREIGN KEY ("switch_id") REFERENCES "public"."lastward_switches"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "lastward_switch_payloads" ADD CONSTRAINT "lastward_switch_payloads_switch_id_lastward_switches_id_fk" FOREIGN KEY ("switch_id") REFERENCES "public"."lastward_switches"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "lastward_switch_payloads" ADD CONSTRAINT "lastward_switch_payloads_action_id_lastward_switch_actions_id_fk" FOREIGN KEY ("action_id") REFERENCES "public"."lastward_switch_actions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "lastward_switch_recipients" ADD CONSTRAINT "lastward_switch_recipients_switch_id_lastward_switches_id_fk" FOREIGN KEY ("switch_id") REFERENCES "public"."lastward_switches"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "lastward_public_pages_switch_idx" ON "lastward_public_pages" USING btree ("switch_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "lastward_public_pages_action_uniq" ON "lastward_public_pages" USING btree ("action_id");--> statement-breakpoint
-CREATE INDEX "lastward_release_tokens_switch_idx" ON "lastward_release_tokens" USING btree ("switch_id");--> statement-breakpoint
-CREATE INDEX "lastward_actions_switch_idx" ON "lastward_switch_actions" USING btree ("switch_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "lastward_switch_deliveries_unique_idx" ON "lastward_switch_deliveries" USING btree ("switch_id","kind","step_key");--> statement-breakpoint
-CREATE INDEX "lastward_payloads_switch_idx" ON "lastward_switch_payloads" USING btree ("switch_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "lastward_payloads_action_uniq" ON "lastward_switch_payloads" USING btree ("action_id");--> statement-breakpoint
-CREATE INDEX "lastward_recipients_switch_idx" ON "lastward_switch_recipients" USING btree ("switch_id");--> statement-breakpoint
-CREATE INDEX "lastward_switches_deadline_idx" ON "lastward_switches" USING btree ("next_deadline");--> statement-breakpoint
-CREATE INDEX "lastward_switches_state_idx" ON "lastward_switches" USING btree ("state");
+ALTER TABLE "quietletter_public_pages" ADD CONSTRAINT "quietletter_public_pages_switch_id_quietletter_switches_id_fk" FOREIGN KEY ("switch_id") REFERENCES "public"."quietletter_switches"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "quietletter_public_pages" ADD CONSTRAINT "quietletter_public_pages_action_id_quietletter_switch_actions_id_fk" FOREIGN KEY ("action_id") REFERENCES "public"."quietletter_switch_actions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "quietletter_release_tokens" ADD CONSTRAINT "quietletter_release_tokens_switch_id_quietletter_switches_id_fk" FOREIGN KEY ("switch_id") REFERENCES "public"."quietletter_switches"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "quietletter_release_tokens" ADD CONSTRAINT "quietletter_release_tokens_recipient_id_quietletter_switch_recipients_id_fk" FOREIGN KEY ("recipient_id") REFERENCES "public"."quietletter_switch_recipients"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "quietletter_switch_actions" ADD CONSTRAINT "quietletter_switch_actions_switch_id_quietletter_switches_id_fk" FOREIGN KEY ("switch_id") REFERENCES "public"."quietletter_switches"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "quietletter_switch_deliveries" ADD CONSTRAINT "quietletter_switch_deliveries_switch_id_quietletter_switches_id_fk" FOREIGN KEY ("switch_id") REFERENCES "public"."quietletter_switches"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "quietletter_switch_payloads" ADD CONSTRAINT "quietletter_switch_payloads_switch_id_quietletter_switches_id_fk" FOREIGN KEY ("switch_id") REFERENCES "public"."quietletter_switches"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "quietletter_switch_payloads" ADD CONSTRAINT "quietletter_switch_payloads_action_id_quietletter_switch_actions_id_fk" FOREIGN KEY ("action_id") REFERENCES "public"."quietletter_switch_actions"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "quietletter_switch_recipients" ADD CONSTRAINT "quietletter_switch_recipients_switch_id_quietletter_switches_id_fk" FOREIGN KEY ("switch_id") REFERENCES "public"."quietletter_switches"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "quietletter_public_pages_switch_idx" ON "quietletter_public_pages" USING btree ("switch_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "quietletter_public_pages_action_uniq" ON "quietletter_public_pages" USING btree ("action_id");--> statement-breakpoint
+CREATE INDEX "quietletter_release_tokens_switch_idx" ON "quietletter_release_tokens" USING btree ("switch_id");--> statement-breakpoint
+CREATE INDEX "quietletter_actions_switch_idx" ON "quietletter_switch_actions" USING btree ("switch_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "quietletter_switch_deliveries_unique_idx" ON "quietletter_switch_deliveries" USING btree ("switch_id","kind","step_key");--> statement-breakpoint
+CREATE INDEX "quietletter_payloads_switch_idx" ON "quietletter_switch_payloads" USING btree ("switch_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "quietletter_payloads_action_uniq" ON "quietletter_switch_payloads" USING btree ("action_id");--> statement-breakpoint
+CREATE INDEX "quietletter_recipients_switch_idx" ON "quietletter_switch_recipients" USING btree ("switch_id");--> statement-breakpoint
+CREATE INDEX "quietletter_switches_deadline_idx" ON "quietletter_switches" USING btree ("next_deadline");--> statement-breakpoint
+CREATE INDEX "quietletter_switches_state_idx" ON "quietletter_switches" USING btree ("state");

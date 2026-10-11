@@ -1,21 +1,31 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { env } from './env.js';
 import { ValidationError } from './shared/errors.js';
-import { renderNotFoundPage, renderPublicPage, renderReleasePage } from './shared/html.js';
+import { renderNotFoundPage, renderPublicPage, renderReleasePage, type PageLinks } from './shared/html.js';
+import { vendorScript } from './shared/vendor.js';
 import { payloadAckDTO, switchDTO } from './serializers.js';
-import { createSwitchSchema, parse, putPayloadSchema } from './schemas.js';
+import { createSwitchSchema, parse, putPayloadSchema, regionalSchema } from './schemas.js';
 import {
+    applySwitchImport,
     checkinSwitch,
     deleteSwitch,
     disarmSwitch,
+    exportSwitches,
+    fillSwitchRegional,
     getPublicPage,
     getReleaseBundle,
     getSwitch,
     listSwitches,
+    planSwitchImport,
     putPayload,
     upsertSwitch,
 } from './service.js';
+import { exportFileName } from './transfer.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Footer links on the public HTML pages. */
+const PAGE_LINKS: PageLinks = { docs: env.DOCS_URL, privacy: env.PRIVACY_URL, terms: env.TERMS_URL };
 
 function idParam(request: FastifyRequest<{ Params: { id: string } }>): string {
     const id = request.params.id;
@@ -56,6 +66,13 @@ export async function checkinHandler(request: FastifyRequest<{ Params: { id: str
     return reply.send(switchDTO(row));
 }
 
+/** PUT /v1/switches/:id/regional — fill in the zone / language a legacy switch is missing. */
+export async function putRegionalHandler(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
+    const input = parse(regionalSchema, request.body);
+    const row = await fillSwitchRegional(idParam(request), input);
+    return reply.send(switchDTO(row));
+}
+
 /** POST /v1/switches/:id/disarm — turn the switch off (reversible via check-in). */
 export async function disarmHandler(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
     const row = await disarmSwitch(idParam(request));
@@ -66,6 +83,27 @@ export async function disarmHandler(request: FastifyRequest<{ Params: { id: stri
 export async function deleteSwitchHandler(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) {
     await deleteSwitch(idParam(request));
     return reply.code(204).send();
+}
+
+/**
+ * GET /v1/switches/export — every live switch, payloads included, as one portable
+ * file (see transfer.ts). The same file imports into the hosted service.
+ */
+export async function exportSwitchesHandler(_request: FastifyRequest, reply: FastifyReply) {
+    const file = await exportSwitches();
+    return reply
+        .header('content-disposition', `attachment; filename="${exportFileName(new Date(file.exportedAt))}"`)
+        .send(file);
+}
+
+/**
+ * POST /v1/switches/import — recreate the switches of an export file (from the hosted
+ * service or another instance). Unlimited and `public_page`-capable like a regular save.
+ */
+export async function importSwitchesHandler(request: FastifyRequest, reply: FastifyReply) {
+    const plan = await planSwitchImport(request.body);
+    const report = await applySwitchImport(plan);
+    return reply.send(report);
 }
 
 /** PUT /v1/switches/:id/actions/:actionId/payload — upload the encrypted (or readable) payload. */
@@ -111,9 +149,25 @@ export async function releaseHandler(request: FastifyRequest<{ Params: { token: 
 export async function releasePageHandler(request: FastifyRequest<{ Params: { token: string } }>, reply: FastifyReply) {
     const token = request.params.token;
     if (typeof token !== 'string' || token.length < 16 || token.length > 64) {
-        return reply.code(404).type('text/html; charset=utf-8').send(renderNotFoundPage('Invalid release link.'));
+        return reply
+            .code(404)
+            .type('text/html; charset=utf-8')
+            .send(renderNotFoundPage('Invalid release link.', PAGE_LINKS));
     }
-    return reply.code(200).type('text/html; charset=utf-8').send(renderReleasePage(token));
+    return reply.code(200).type('text/html; charset=utf-8').send(renderReleasePage(token, PAGE_LINKS));
+}
+
+/**
+ * GET /vendor/:file — PUBLIC. The libsodium browser build the release page decrypts
+ * with, served from this instance rather than a CDN (see shared/vendor.ts).
+ */
+export async function vendorHandler(request: FastifyRequest<{ Params: { file: string } }>, reply: FastifyReply) {
+    const script = vendorScript(request.params.file);
+    if (!script) return reply.code(404).send({ code: 'not_found', message: 'not found' });
+    return reply
+        .type('text/javascript; charset=utf-8')
+        .header('cache-control', 'public, max-age=86400')
+        .send(await script);
 }
 
 /**
@@ -128,10 +182,12 @@ export async function publicPageHandler(request: FastifyRequest<{ Params: { slug
         return reply
             .code(404)
             .type('text/html; charset=utf-8')
-            .send(renderNotFoundPage('No public page is published at this address.'));
+            .send(renderNotFoundPage('No public page is published at this address.', PAGE_LINKS));
     }
     return reply
         .code(200)
         .type('text/html; charset=utf-8')
-        .send(renderPublicPage({ title: page.title, content: page.content, publishedAt: page.publishedAt }));
+        .send(
+            renderPublicPage({ title: page.title, content: page.content, publishedAt: page.publishedAt }, PAGE_LINKS),
+        );
 }

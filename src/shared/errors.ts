@@ -1,6 +1,6 @@
 /**
  * Errors serialize to a flat contract: { "code": "snake_case_reason", "message": "..." }.
- * Clients switch on `code`; `message` is for logs. This mirrors the Lastward cloud
+ * Clients switch on `code`; `message` is for logs. This mirrors the Quietletter cloud
  * wire contract so a client can talk to either backend unchanged.
  */
 

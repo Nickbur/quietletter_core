@@ -1,18 +1,18 @@
 {
-    "name": "lastward-core",
+    "name": "quietletter-core",
     "version": "1.0.0",
     "license": "AGPL-3.0-only",
-    "description": "Lastward continuity core — a minimal, self-contained, self-hostable server for a zero-knowledge digital dead man's switch. AGPL-3.0. Implements the same wire protocol as the Lastward cloud plus the self-host-only public_page action.",
+    "description": "Quietletter continuity core — a minimal, self-contained, self-hostable server for a zero-knowledge digital dead man's switch. AGPL-3.0. Implements the same wire protocol as the Quietletter cloud plus the self-host-only public_page action.",
     "type": "module",
     "engines": {
         "node": ">=24.16.0"
     },
     "scripts": {
-        "switch_to_dev": "node -e \"require('fs').copyFileSync('env/env.dev','.env')\"",
-        "switch_to_prod": "node -e \"require('fs').copyFileSync('env/env.prod','.env')\"",
+        "switch_to_dev": "shx cp -f ./env/env.dev .env",
+        "switch_to_prod": "shx cp -f ./env/env.prod .env",
         "serve": "tsx watch src/server.ts",
         "fix": "prettier --write --log-level warn . && eslint . --fix",
-        "build": "prettier --check . && eslint . && tsc -p tsconfig.json",
+        "build": "prettier --check . && eslint . && tsc -p tsconfig.json && vitest run",
         "start": "node dist/server.js",
         "db:generate": "tsc -p tsconfig.json && drizzle-kit generate",
         "postdb:generate": "node scripts/format-migrations.mjs && prettier --write drizzle --log-level warn",
@@ -20,21 +20,25 @@
         "db:migrate:prod": "node dist/db/migrate.js",
         "sweep": "tsx src/sweep.ts",
         "sweep:prod": "node dist/sweep.js",
-        "re-install-npm": "npm cache clean --force && node -e \"for(const p of ['node_modules','dist','package-lock.json'])require('fs').rmSync(p,{recursive:true,force:true})\" && npm install",
+        "re-install-deps": "npm cache clean --force && shx rm -rf node_modules dist package-lock.json && npm install",
         "prepare": "husky || exit 0"
     },
     "dependencies": {
+        "@date-fns/tz": "1.5.0",
         "@fastify/cors": "11.3.0",
         "@fastify/rate-limit": "11.2.0",
         "date-fns": "4.4.0",
         "dotenv": "18.0.5",
         "drizzle-orm": "0.45.3",
         "fastify": "5.12.5",
+        "libsodium-sumo": "0.8.4",
+        "libsodium-wrappers-sumo": "0.8.4",
         "nodemailer": "10.0.13",
         "pg": "8.23.1",
         "zod": "4.6.5"
     },
     "devDependencies": {
+        "@electric-sql/pglite": "0.5.8",
         "@eslint/js": "10.0.1",
         "@types/node": "24.19.1",
         "@types/nodemailer": "8.0.2",
@@ -46,12 +50,18 @@
         "husky": "9.1.7",
         "lint-staged": "17.6.0",
         "prettier": "3.9.9",
+        "shx": "0.4.0",
         "tsx": "4.23.15",
         "typescript": "6.0.3",
-        "typescript-eslint": "8.71.0"
+        "typescript-eslint": "8.71.0",
+        "vitest": "5.0.3"
     },
     "lint-staged": {
         "*.{js,mjs,cjs,ts,mts,cts}": "eslint --fix --no-warn-ignored",
         "*": "prettier --write --ignore-unknown"
+    },
+    "allowScripts": {
+        "esbuild": false,
+        "fsevents": false
     }
 }

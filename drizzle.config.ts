@@ -4,7 +4,7 @@ import { defineConfig } from 'drizzle-kit';
 // Read DATABASE_URL directly (independent of the app's full env validation, which
 // also requires OWNER_TOKEN) so migration GENERATION works without every runtime
 // secret being present — e.g. `DATABASE_URL=postgres://x drizzle-kit generate`.
-const url = process.env.DATABASE_URL ?? 'postgres://placeholder@localhost:5432/lastward';
+const url = process.env.DATABASE_URL ?? 'postgres://placeholder@localhost:5432/quietletter';
 
 export default defineConfig({
     // Points at the COMPILED schema (run `npm run build` first — the `db:generate`

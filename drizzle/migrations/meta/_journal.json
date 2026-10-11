@@ -8,6 +8,20 @@
             "when": 1789435326038,
             "tag": "0000_cloudy_captain_america",
             "breakpoints": true
+        },
+        {
+            "idx": 1,
+            "version": "7",
+            "when": 1791571484999,
+            "tag": "0001_switch_timezone",
+            "breakpoints": true
+        },
+        {
+            "idx": 2,
+            "version": "7",
+            "when": 1791573239857,
+            "tag": "0002_switch_locale",
+            "breakpoints": true
         }
     ]
 }
