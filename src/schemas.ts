@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { MIN_GRACE_HOURS } from './logic.js';
+import { defaultGrace } from './db/schema.js';
+import { MIN_GRACE_HOURS, effectiveGraceHours } from './logic.js';
 import { ValidationError } from './shared/errors.js';
 import { isValidTimeZone } from './shared/timezone.js';
 
@@ -17,8 +18,9 @@ export function parse<T>(schema: z.ZodType<T>, body: unknown): T {
 /**
  * Request validation. The wire shape mirrors the Quietletter client's `Switch` model
  * (camelCase) so the same client can talk to this core or the cloud. Safety floors
- * are enforced here as well as in the sweep: grace ≥ 48h, and every switch must
- * warn on at least push + email before it can fire.
+ * are enforced here as well as in the sweep: grace ≥ 48h, every switch must warn on
+ * at least push + email before it can fire, and every warning must fall inside the
+ * grace window (before the fire time).
  *
  * SELF-HOST DIVERGENCE: this build ACCEPTS the `public_page` action (the cloud
  * refuses it). A `public_page` is public plaintext, so it must be `readable`
@@ -142,19 +144,40 @@ const localeStr = z
     .trim()
     .regex(/^[a-z]{2}(-[A-Za-z]{2})?$/, 'expected a language code');
 
-export const createSwitchSchema = z.object({
-    title: z.string().trim().min(1).max(300),
-    cadence: cadence.optional(),
-    grace: grace.optional(),
-    warnings: warnings.optional(),
-    warningPhone: phoneStr.nullable().optional().default(null),
-    // The saving device's IANA zone. Absent / null (older app builds) keeps the stored one.
-    timezone: z.string().trim().max(64).refine(isValidTimeZone, { message: 'invalid time zone' }).nullable().optional(),
-    // The saving app's UI language. Absent / null (older app builds) keeps the stored one.
-    locale: localeStr.nullable().optional(),
-    recipients: z.array(recipientInput).max(50).optional().default([]),
-    actions: z.array(actionInput).max(20).optional().default([]),
-});
+export const createSwitchSchema = z
+    .object({
+        title: z.string().trim().min(1).max(300),
+        cadence: cadence.optional(),
+        grace: grace.optional(),
+        warnings: warnings.optional(),
+        warningPhone: phoneStr.nullable().optional().default(null),
+        // The saving device's IANA zone. Absent / null (older app builds) keeps the stored one.
+        timezone: z
+            .string()
+            .trim()
+            .max(64)
+            .refine(isValidTimeZone, { message: 'invalid time zone' })
+            .nullable()
+            .optional(),
+        // The saving app's UI language. Absent / null (older app builds) keeps the stored one.
+        locale: localeStr.nullable().optional(),
+        recipients: z.array(recipientInput).max(50).optional().default([]),
+        actions: z.array(actionInput).max(20).optional().default([]),
+    })
+    .superRefine((s, ctx) => {
+        // A warning at/after the fire time would never be sent (see `dueWarnings`).
+        if (!s.warnings) return;
+        const limit = effectiveGraceHours(s.grace ?? defaultGrace());
+        s.warnings.forEach((w, i) => {
+            if (w.offsetHours >= limit) {
+                ctx.addIssue({
+                    code: 'custom',
+                    path: ['warnings', i, 'offsetHours'],
+                    message: `warning offset must be less than the grace period (${limit} hours)`,
+                });
+            }
+        });
+    });
 
 export type CreateSwitchInput = z.output<typeof createSwitchSchema>;
 export type RecipientInput = z.output<typeof recipientInput>;

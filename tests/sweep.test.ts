@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { eq, sql } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/pglite/migrator';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * A real Postgres (PGlite, in-process) with the core's migrations applied, so the
@@ -36,7 +36,8 @@ import {
     type GraceConfig,
     type WarningStep,
 } from '../src/db/schema.js';
-import { checkinSwitch, disarmSwitch, fillSwitchRegional } from '../src/service.js';
+import { createSwitchSchema } from '../src/schemas.js';
+import { checkinSwitch, disarmSwitch, fillSwitchRegional, upsertSwitch } from '../src/service.js';
 import { ApiError } from '../src/shared/errors.js';
 import { uuidv7 } from '../src/shared/id.js';
 import { runSweep, transitionSwitch } from '../src/sweep.js';
@@ -68,7 +69,11 @@ interface SeedOptions {
     firedAt?: Date | null;
     recipients?: string[];
     /** `zk` / `readable` = an uploaded payload of that mode; `none` = configured, never uploaded. */
-    actions?: Array<{ type: 'message' | 'secret' | 'public_page'; payload: 'zk' | 'readable' | 'none' }>;
+    actions?: Array<{
+        type: 'message' | 'secret' | 'public_page';
+        payload: 'zk' | 'readable' | 'none';
+        subject?: string;
+    }>;
 }
 
 async function seedSwitch(o: SeedOptions = {}): Promise<string> {
@@ -100,7 +105,10 @@ async function seedSwitch(o: SeedOptions = {}): Promise<string> {
                 config:
                     a.type === 'public_page'
                         ? { mode: 'readable', slug: 'my-statement' }
-                        : { mode: a.payload === 'zk' ? 'zk' : 'readable' },
+                        : {
+                              mode: a.payload === 'zk' ? 'zk' : 'readable',
+                              ...(a.subject ? { subject: a.subject } : {}),
+                          },
             })
             .returning();
         if (!action || a.payload === 'none') continue;
@@ -220,7 +228,7 @@ describe('firing', () => {
         const id = await seedSwitch({
             recipients: ['a@example.com', 'b@example.com'],
             actions: [
-                { type: 'message', payload: 'readable' },
+                { type: 'message', payload: 'readable', subject: 'To my family' },
                 { type: 'secret', payload: 'zk' },
             ],
         });
@@ -230,9 +238,12 @@ describe('firing', () => {
         expect(row.state).toBe('fired');
         expect(row.firedAt?.toISOString()).toBe(at(72).toISOString());
 
-        const [to, opts] = h.fireEmail.mock.calls[0] as [string, { readableMessages: string[]; releaseUrl: string }];
+        const [to, opts] = h.fireEmail.mock.calls[0] as [
+            string,
+            { readableMessages: Array<{ subject: string | null; body: string }>; releaseUrl: string },
+        ];
         expect(to).toBe('a@example.com');
-        expect(opts.readableMessages).toEqual(['I love you all.']);
+        expect(opts.readableMessages).toEqual([{ subject: 'To my family', body: 'I love you all.' }]);
         expect(opts.releaseUrl).toMatch(/^https:\/\/core\.example\.com\/release\/[\w-]{20,}$/);
         expect(await db.select().from(releaseTokens)).toHaveLength(2);
 
@@ -304,14 +315,125 @@ describe('the owner always wins a race with the sweep', () => {
         );
         expect(await transitionSwitch(await stateOf(id), ['active'], { state: 'grace' })).toBe(true);
     });
+
+    it("never revives a switch the sweep fired between the owner's read and write", async () => {
+        const id = await seedSwitch({ state: 'grace' });
+        const stale = await stateOf(id); // what the owner's request read
+        expect(await transitionSwitch(stale, ['grace'], { state: 'fired', firedAt: at(72) })).toBe(true);
+        const read = vi.spyOn(db.query.switches, 'findFirst');
+        const writes = [
+            () => checkinSwitch(id),
+            () => disarmSwitch(id),
+            () => upsertSwitch(id, createSwitchSchema.parse({ title: 'Edited' })),
+        ];
+        for (const write of writes) {
+            read.mockResolvedValueOnce(stale);
+            expect(await apiCode(write)).toBe('409 already_fired');
+        }
+        read.mockRestore();
+        const row = await stateOf(id);
+        expect(row.state).toBe('fired');
+        expect(row.title).toBe('For my family');
+    });
+
+    it("answers 404 for a switch deleted between the owner's read and write", async () => {
+        const id = await seedSwitch();
+        const stale = await stateOf(id);
+        await db.delete(switches).where(eq(switches.id, id));
+        const read = vi.spyOn(db.query.switches, 'findFirst').mockResolvedValueOnce(stale);
+        expect(await apiCode(() => checkinSwitch(id))).toBe('404 switch_not_found');
+        read.mockRestore();
+    });
 });
 
 describe('a fired switch is terminal', () => {
-    it('refuses a check-in and a disarm with 409 already_fired, like the hosted service', async () => {
+    it('refuses a check-in, a disarm and an edit with 409 already_fired, like the hosted service', async () => {
         const id = await seedSwitch({ state: 'fired', firedAt: at(72) });
         expect(await apiCode(() => checkinSwitch(id))).toBe('409 already_fired');
         expect(await apiCode(() => disarmSwitch(id))).toBe('409 already_fired');
-        expect((await stateOf(id)).state).toBe('fired');
+        expect(await apiCode(() => upsertSwitch(id, createSwitchSchema.parse({ title: 'Edited' })))).toBe(
+            '409 already_fired',
+        );
+        const row = await stateOf(id);
+        expect(row.state).toBe('fired');
+        expect(row.title).toBe('For my family');
+    });
+});
+
+describe('editing a switch', () => {
+    const edit = (cadenceDays: number, grace: GraceConfig = GRACE_3D) =>
+        createSwitchSchema.parse({
+            title: 'For my family',
+            cadence: { value: cadenceDays, unit: 'day' },
+            grace,
+            warnings: [
+                { offsetHours: 0, channels: ['push', 'email'] },
+                { offsetHours: 24, channels: ['email'] },
+            ],
+            recipients: [{ email: 'heir@example.com' }],
+            actions: [],
+        });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('never fires without warnings when a shorter cadence lands in the past', async () => {
+        const id = await seedSwitch();
+        const now = new Date(T0.getTime() + 5 * 24 * HOUR); // 2 days before the 7-day deadline
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(now);
+        // A 2-day cadence from the last check-in would have passed 3 days ago.
+        const { row } = await upsertSwitch(id, edit(2));
+        expect(row.nextDeadline.toISOString()).toBe(now.toISOString());
+        expect(row.state).toBe('active');
+        vi.useRealTimers();
+
+        const first = await runSweep(now);
+        expect(first).toMatchObject({ fired: 0, warned: 1 });
+        expect((await stateOf(id)).state).toBe('grace');
+        expect(h.warningEmail).toHaveBeenCalledOnce();
+
+        expect((await runSweep(new Date(now.getTime() + 71 * HOUR))).fired).toBe(0);
+        expect(h.warningEmail).toHaveBeenCalledTimes(2); // the 24h step went out too
+        expect((await runSweep(new Date(now.getTime() + 72 * HOUR))).fired).toBe(1);
+    });
+
+    it('keeps a running grace window where it is', async () => {
+        const id = await seedSwitch({ state: 'grace' });
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(at(10));
+        for (const days of [7, 2]) {
+            const { row } = await upsertSwitch(id, edit(days));
+            expect(row.nextDeadline.toISOString()).toBe(DEADLINE.toISOString());
+            expect(row.state).toBe('grace');
+        }
+    });
+
+    it('ends the grace window when a longer cadence moves the deadline into the future', async () => {
+        const id = await seedSwitch({ state: 'grace' });
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(at(10));
+        const { row } = await upsertSwitch(id, edit(30));
+        expect(row.nextDeadline.toISOString()).toBe('2026-10-31T00:00:00.000Z'); // last check-in + 30 days
+        expect(row.state).toBe('active');
+    });
+
+    it('never brings the fire time closer when a shorter grace is saved during the grace window', async () => {
+        const id = await seedSwitch({ state: 'grace', grace: { value: 7, unit: 'day' } }); // fires at +168h
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(at(60));
+        // A 2-day grace from the passed deadline would have fired 12 hours ago.
+        const { row } = await upsertSwitch(id, edit(7, { value: 2, unit: 'day' }));
+        expect(row.nextDeadline.toISOString()).toBe(at(120).toISOString()); // 168h − 48h
+        expect(row.state).toBe('active');
+        vi.useRealTimers();
+
+        expect((await runSweep(at(60))).fired).toBe(0);
+        expect(await runSweep(at(120))).toMatchObject({ fired: 0, warned: 1 });
+        expect((await runSweep(at(167))).fired).toBe(0);
+        expect(h.warningEmail).toHaveBeenCalledTimes(2); // both steps of the new window went out
+        expect((await runSweep(at(168))).fired).toBe(1);
     });
 });
 

@@ -20,7 +20,7 @@ import {
 import { ConflictError, NotFoundError } from './shared/errors.js';
 import { uuidv7 } from './shared/id.js';
 import { isUniqueViolation } from './shared/pgErrors.js';
-import { computeNextDeadline } from './logic.js';
+import { computeNextDeadline, editedDeadline } from './logic.js';
 import type { CreateSwitchInput, PutPayloadInput, RegionalInput } from './schemas.js';
 import {
     buildExportFile,
@@ -38,8 +38,22 @@ import {
  * SINGLE-TENANT service: every switch belongs to the one bootstrapped owner, so
  * there is no per-(user,project) scoping — only the switch id. Switch STATE +
  * `nextDeadline` are server-authoritative: only `checkin` and the sweep move a
- * switch toward firing; editing config never resets the timer.
+ * switch toward firing; editing config never resets the timer (see `editedDeadline`).
  */
+
+/**
+ * An owner write (edit, check-in, disarm) lands only on a switch that hasn't fired:
+ * the sweep may fire it between the owner's read and write, and firing is final.
+ */
+function ownerWritable(id: string) {
+    return and(eq(switches.id, id), ne(switches.state, 'fired'));
+}
+
+/** The error for an owner write that matched no row: the switch was deleted, or it fired. */
+async function refusedWrite(exec: typeof db | Tx, id: string, message: string): Promise<Error> {
+    const row = await exec.query.switches.findFirst({ where: eq(switches.id, id), columns: { id: true } });
+    return row ? new ConflictError('already_fired', message) : new NotFoundError('switch_not_found');
+}
 
 export interface SwitchWithChildren extends SwitchRow {
     recipients: SwitchRecipientRow[];
@@ -95,7 +109,10 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
  * Upsert a switch by client id (offline-friendly). Full body: replaces the
  * recipient + action sets atomically. On create the timer starts now; on update
  * the timer is recomputed from the LAST CHECK-IN + the (possibly new) cadence —
- * editing config must never be a backdoor that silently extends the deadline.
+ * editing config must never be a backdoor that silently extends the deadline — but
+ * never into the past (`editedDeadline`), so a shortened cadence starts the grace
+ * window instead of firing without warnings. A fired switch is final and cannot be
+ * edited.
  */
 export async function upsertSwitch(
     id: string,
@@ -106,6 +123,9 @@ export async function upsertSwitch(
     const warnings = input.warnings ?? defaultWarnings();
 
     const existing = await db.query.switches.findFirst({ where: eq(switches.id, id) });
+    if (existing?.state === 'fired') {
+        throw new ConflictError('already_fired', 'a fired switch cannot be edited');
+    }
     const created = !existing;
     // A sent zone / language replaces the stored one; an older app build omits them and keeps them.
     const timezone = input.timezone || existing?.timezone || null;
@@ -113,20 +133,27 @@ export async function upsertSwitch(
 
     await db.transaction(async (tx) => {
         if (existing) {
-            await tx
+            const now = new Date();
+            const nextDeadline = editedDeadline(existing, cadence, grace, timezone, now);
+            // A deadline moved back into the future ends a running grace window.
+            const state = existing.state === 'grace' && nextDeadline > now ? 'active' : existing.state;
+            const [written] = await tx
                 .update(switches)
                 .set({
                     title: input.title,
+                    state,
                     cadence,
                     grace,
                     warnings,
                     warningPhone: input.warningPhone ?? null,
                     timezone,
                     locale,
-                    nextDeadline: computeNextDeadline(existing.lastCheckinAt, cadence, timezone),
-                    updatedAt: new Date(),
+                    nextDeadline,
+                    updatedAt: now,
                 })
-                .where(eq(switches.id, id));
+                .where(ownerWritable(id))
+                .returning({ id: switches.id });
+            if (!written) throw await refusedWrite(tx, id, 'a fired switch cannot be edited');
         } else {
             const now = new Date();
             await tx.insert(switches).values({
@@ -218,7 +245,7 @@ export async function checkinSwitch(id: string): Promise<SwitchWithChildren> {
     if (row.state === 'fired') throw new ConflictError('already_fired', 'a fired switch cannot be checked in');
 
     const now = new Date();
-    await db
+    const [written] = await db
         .update(switches)
         .set({
             lastCheckinAt: now,
@@ -228,7 +255,9 @@ export async function checkinSwitch(id: string): Promise<SwitchWithChildren> {
             disarmedAt: null,
             updatedAt: now,
         })
-        .where(eq(switches.id, id));
+        .where(ownerWritable(id))
+        .returning({ id: switches.id });
+    if (!written) throw await refusedWrite(db, id, 'a fired switch cannot be checked in');
 
     const updated = await getSwitch(id);
     if (!updated) throw new Error('checkin_failed');
@@ -242,7 +271,12 @@ export async function disarmSwitch(id: string): Promise<SwitchWithChildren> {
     if (row.state === 'fired') throw new ConflictError('already_fired', 'a fired switch cannot be disarmed');
 
     const now = new Date();
-    await db.update(switches).set({ state: 'disarmed', disarmedAt: now, updatedAt: now }).where(eq(switches.id, id));
+    const [written] = await db
+        .update(switches)
+        .set({ state: 'disarmed', disarmedAt: now, updatedAt: now })
+        .where(ownerWritable(id))
+        .returning({ id: switches.id });
+    if (!written) throw await refusedWrite(db, id, 'a fired switch cannot be disarmed');
 
     const updated = await getSwitch(id);
     if (!updated) throw new Error('disarm_failed');

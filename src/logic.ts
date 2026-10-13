@@ -42,15 +42,45 @@ export function computeNextDeadline(from: Date, cadence: CheckinCadence, zone?: 
     return new Date(next.getTime());
 }
 
+/**
+ * The deadline after the owner edits a switch. Recomputed from the LAST CHECK-IN + the
+ * (possibly new) cadence — an edit is not a check-in, so it never buys more time than a
+ * real one would — but never moved into the past: a shortened cadence that lands before
+ * `now` starts the grace window now, so every warning still gets its chance before the
+ * switch can fire. Once the deadline has passed (the grace window is running), an edit
+ * moves neither the deadline nor the fire time earlier: a shorter grace shifts the
+ * deadline later, so the switch still fires when it would have, never sooner.
+ */
+export function editedDeadline(
+    previous: { lastCheckinAt: Date; nextDeadline: Date; grace: GraceConfig },
+    cadence: CheckinCadence,
+    grace: GraceConfig,
+    zone: string | null | undefined,
+    now: Date,
+): Date {
+    const next = computeNextDeadline(previous.lastCheckinAt, cadence, zone);
+    let floor = now;
+    if (previous.nextDeadline < now) {
+        // The deadline that keeps the running window's fire time under the new grace.
+        const fireFloor = addHours(graceEndsAt(previous.nextDeadline, previous.grace), -effectiveGraceHours(grace));
+        floor = fireFloor > previous.nextDeadline ? fireFloor : previous.nextDeadline;
+    }
+    return next < floor ? new Date(floor.getTime()) : next;
+}
+
 /** Configured grace expressed in hours (before applying the floor). */
 export function graceHours(grace: GraceConfig): number {
     return grace.unit === 'day' ? grace.value * 24 : grace.value;
 }
 
+/** Hours from the deadline to the fire time: max(configured grace, 48h floor). */
+export function effectiveGraceHours(grace: GraceConfig): number {
+    return Math.max(graceHours(grace), MIN_GRACE_HOURS);
+}
+
 /** The instant the switch fires: deadline + max(configured grace, 48h floor). */
 export function graceEndsAt(nextDeadline: Date, grace: GraceConfig): Date {
-    const hours = Math.max(graceHours(grace), MIN_GRACE_HOURS);
-    return addHours(nextDeadline, hours);
+    return addHours(nextDeadline, effectiveGraceHours(grace));
 }
 
 /** Deterministic ledger key for one warning step in the current check-in cycle. */

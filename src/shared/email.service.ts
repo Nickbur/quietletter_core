@@ -103,11 +103,18 @@ export async function sendWarningEmail(
     });
 }
 
+/** One readable message of a fired switch: the owner's optional Subject + the text. */
+export interface ReadableMessage {
+    subject?: string | null;
+    body: string;
+}
+
 /**
- * Quietletter fire notification to a RECIPIENT. Carries any readable messages inline,
- * a link to the release page for encrypted items (where the recipient enters the
- * passphrase the owner shared out-of-band), and any public-page URLs that went
- * live. The server never sees the passphrase or the encrypted content. Written in
+ * Quietletter fire notification to a RECIPIENT. Carries any readable messages inline
+ * (each under its Subject, when it has one), a link to the release page for encrypted
+ * items (where the recipient enters the passphrase the owner shared out-of-band), and
+ * any public-page URLs that went live. The server never sees the passphrase or the
+ * encrypted content. Written in
  * the switch's language — the closest guess at the recipients' (they have no account).
  */
 export async function sendFireEmail(
@@ -115,7 +122,7 @@ export async function sendFireEmail(
     opts: {
         switchTitle: string;
         recipientName?: string | null;
-        readableMessages?: string[];
+        readableMessages?: ReadableMessage[];
         releaseUrl?: string | null;
         publicUrls?: string[];
         /** The switch's language — Russian for `ru`, else English. */
@@ -155,11 +162,16 @@ export async function sendFireEmail(
               publicLead: 'Public pages were published:',
               publicText: 'Public pages:',
           };
-    const messages = (opts.readableMessages ?? []).filter((m) => m && m.trim());
+    const messages = (opts.readableMessages ?? [])
+        .filter((m) => m.body && m.body.trim())
+        .map((m) => ({ subject: m.subject?.trim() || null, body: m.body }));
     const messagesHtml = messages
         .map(
             (m) =>
-                `<div style="border-left:3px solid #e5e7eb;padding:4px 0 4px 12px;margin:12px 0;color:#444;white-space:pre-wrap">${escapeHtml(m)}</div>`,
+                (m.subject
+                    ? `<p style="color:#111;font-weight:600;margin:16px 0 0">${escapeHtml(m.subject)}</p>`
+                    : '') +
+                `<div style="border-left:3px solid #e5e7eb;padding:4px 0 4px 12px;margin:${m.subject ? '4px' : '12px'} 0 12px;color:#444;white-space:pre-wrap">${escapeHtml(m.body)}</div>`,
         )
         .join('');
     const releaseHtml = opts.releaseUrl
@@ -177,7 +189,7 @@ export async function sendFireEmail(
     const textParts = [
         c.hello,
         c.textIntro,
-        ...messages,
+        ...messages.map((m) => (m.subject ? `${m.subject}\n${m.body}` : m.body)),
         opts.releaseUrl ? c.releaseText(opts.releaseUrl) : '',
         ...(publicUrls.length ? [c.publicText, ...publicUrls] : []),
     ].filter(Boolean);

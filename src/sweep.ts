@@ -1,6 +1,6 @@
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { and, eq, gt, inArray, lte, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, lte, or, sql } from 'drizzle-orm';
 import { db, pool } from './db/client.js';
 import {
     publicPages,
@@ -15,7 +15,7 @@ import {
     type WarnChannel,
 } from './db/schema.js';
 import { env } from './env.js';
-import { sendFireEmail, sendWarningEmail } from './shared/email.service.js';
+import { sendFireEmail, sendWarningEmail, type ReadableMessage } from './shared/email.service.js';
 import { getOrCreateReleaseToken, publishPublicPage } from './service.js';
 import { dueWarnings, graceEndsAt } from './logic.js';
 
@@ -228,7 +228,10 @@ async function fire(row: SwitchRow, now: Date, result: SweepResult): Promise<voi
     }
 
     const [actions, payloads] = await Promise.all([
-        db.query.switchActions.findMany({ where: eq(switchActions.switchId, row.id) }),
+        db.query.switchActions.findMany({
+            where: eq(switchActions.switchId, row.id),
+            orderBy: [asc(switchActions.sortOrder)],
+        }),
         db.query.switchPayloads.findMany({ where: eq(switchPayloads.switchId, row.id) }),
     ]);
     const payByAction = new Map(payloads.map((p) => [p.actionId, p]));
@@ -255,11 +258,13 @@ async function fire(row: SwitchRow, now: Date, result: SweepResult): Promise<voi
     const recipients = await db.query.switchRecipients.findMany({ where: eq(switchRecipients.switchId, row.id) });
     if (recipients.length === 0) return;
 
-    const readableMessages = actions
-        .filter((a) => a.type === 'message')
-        .map((a) => payByAction.get(a.id))
-        .filter((p): p is NonNullable<typeof p> => Boolean(p && p.mode === 'readable' && p.readableContent))
-        .map((p) => p.readableContent as string);
+    // Readable messages in the owner's order, each with its Subject.
+    const readableMessages: ReadableMessage[] = [];
+    for (const a of actions) {
+        const p = payByAction.get(a.id);
+        if (a.type !== 'message' || !p || p.mode !== 'readable' || !p.readableContent) continue;
+        readableMessages.push({ subject: a.config.subject ?? null, body: p.readableContent });
+    }
     const hasZk = payloads.some((p) => p.mode === 'zk');
     const expiresAt = new Date(now.getTime() + env.FIRE_RETENTION_DAYS * DAY_MS);
 

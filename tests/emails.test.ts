@@ -53,6 +53,7 @@ describe('sendFireEmail', () => {
         await sendFireEmail('heir@test.invalid', {
             switchTitle: 'Для семьи',
             recipientName: 'Аня',
+            readableMessages: [{ subject: 'Для Ани', body: 'Люблю вас.' }, { body: 'Без темы.' }],
             releaseUrl: 'https://core.test/release/abc',
             publicUrls: ['https://core.test/p/statement'],
             locale: 'ru',
@@ -60,6 +61,9 @@ describe('sendFireEmail', () => {
         const mail = lastMail();
         expect(mail.subject).toBe('Вам кое-что оставили: Для семьи');
         expect(mail.text).toMatch(/^Здравствуйте, Аня,\n\n/);
+        expect(mail.text).toContain('Для Ани\nЛюблю вас.');
+        expect(mail.text).toContain('\n\nБез темы.');
+        expect(mail.html).toContain('Для Ани</p>');
         expect(mail.text).toContain('Публичные страницы:\n\nhttps://core.test/p/statement');
         expect(mail.html).toContain('Открыть то, что вам оставили');
     });
