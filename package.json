@@ -10,7 +10,7 @@
     "scripts": {
         "switch_to_dev": "shx cp -f ./env/env.dev .env",
         "switch_to_prod": "shx cp -f ./env/env.prod .env",
-        "serve": "tsx watch src/server.ts",
+        "serve": "docker compose up --build",
         "fix": "prettier --write --log-level warn . && eslint . --fix",
         "build": "prettier --check . && eslint . && tsc -p tsconfig.json && vitest run",
         "start": "node dist/server.js",
