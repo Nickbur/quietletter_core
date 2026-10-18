@@ -132,8 +132,10 @@ export function renderNotFoundPage(message: string, links?: PageLinks): string {
  * get a passphrase box + reference decryptor. Noindex — release links are private.
  */
 export function renderReleasePage(token: string, links?: PageLinks): string {
-    // Encode the token for safe interpolation into a JS string literal.
-    const jsToken = JSON.stringify(token);
+    // Encode the token for safe interpolation into a JS string literal inside an inline <script>:
+    // JSON quotes it, and `<` becomes `<` so a token like `</script>` can never end the
+    // script element (the literal still evaluates to the same token).
+    const jsToken = JSON.stringify(token).replace(/</g, '\\u003c');
     const body = `
 <h1 id="title">Release</h1>
 <p class="meta" id="meta"></p>
