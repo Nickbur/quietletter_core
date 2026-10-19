@@ -44,6 +44,7 @@
         "@types/nodemailer": "8.0.2",
         "@types/pg": "8.23.1",
         "@vitest/coverage-v8": "5.0.3",
+        "@vitest/eslint-plugin": "1.6.27",
         "drizzle-kit": "0.31.11",
         "eslint": "10.11.0",
         "eslint-config-prettier": "10.1.8",

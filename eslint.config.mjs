@@ -3,6 +3,7 @@
 import { defineConfig, globalIgnores } from 'eslint/config';
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
+import vitest from '@vitest/eslint-plugin';
 import prettier from 'eslint-config-prettier';
 import globals from 'globals';
 
@@ -45,6 +46,17 @@ export default defineConfig(
         files: ['**/*.cjs'],
         languageOptions: { sourceType: 'commonjs' },
         rules: { '@typescript-eslint/no-require-imports': 'off' },
+    },
+    {
+        // Nothing focused, switched off or left as a placeholder reaches `build`: a known bug is pinned with
+        // `it.fails`, not skipped (a conditional `skipIf` for a live, opt-in suite stays allowed).
+        files: ['**/*.test.ts'],
+        plugins: { vitest },
+        rules: {
+            'vitest/no-focused-tests': 'error',
+            'vitest/no-disabled-tests': 'error',
+            'vitest/warn-todo': 'error',
+        },
     },
     prettier,
 );

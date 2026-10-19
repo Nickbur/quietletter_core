@@ -38,6 +38,8 @@ export default defineConfig({
             reporter: ['text-summary'],
             // `build` fails below these.
             thresholds: {
+                // Each file on its own as well: a new module without tests fails `build` instead of hiding in the total.
+                perFile: { lines: 80, statements: 80, functions: 80, branches: 80 },
                 lines: 80,
                 statements: 80,
                 functions: 80,
