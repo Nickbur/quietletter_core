@@ -1,7 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import { describe, expect, it } from 'vitest';
-import { requireOwner } from '../src/auth.js';
-import { AuthError } from '../src/shared/errors.js';
+import { requireOwner } from './auth.js';
+import { AuthError } from './shared/errors.js';
 
 /**
  * The owner gate is the only thing between the internet and disarming or rewriting a dead man's

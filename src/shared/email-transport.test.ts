@@ -13,7 +13,7 @@ const h = vi.hoisted(() => ({
     sendMail: vi.fn(async (..._args: unknown[]) => ({})),
     createTransport: vi.fn(),
 }));
-vi.mock('../src/env.js', () => ({ env: h.env }));
+vi.mock('../env.js', () => ({ env: h.env }));
 vi.mock('nodemailer', () => ({ default: { createTransport: h.createTransport } }));
 
 /**
@@ -23,7 +23,7 @@ vi.mock('nodemailer', () => ({ default: { createTransport: h.createTransport } }
  * email carries the release link and public pages for encrypted / published items.
  */
 
-type Mailer = typeof import('../src/shared/email.service.js');
+type Mailer = typeof import('./email.service.js');
 
 /** A fresh email module: its transport is created lazily once per module instance. */
 async function mailer(env: Partial<typeof h.env> = {}): Promise<Mailer> {
@@ -36,7 +36,7 @@ async function mailer(env: Partial<typeof h.env> = {}): Promise<Mailer> {
         ...env,
     });
     vi.resetModules();
-    return import('../src/shared/email.service.js');
+    return import('./email.service.js');
 }
 
 let log: MockInstance<typeof console.log>;

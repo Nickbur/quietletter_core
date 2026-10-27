@@ -15,7 +15,7 @@ export default defineConfig(
         files: ['**/*.{ts,mts,cts}'],
         languageOptions: {
             parserOptions: {
-                // Root *.config.ts files sit outside the build tsconfig; tests/ has its own tsconfig.
+                // Root *.config.ts files sit outside tsconfig.json (which covers src/, the tests next to the code included).
                 projectService: { allowDefaultProject: ['*.config.ts'] },
                 tsconfigRootDir: import.meta.dirname,
             },

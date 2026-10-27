@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { SwitchActionRow, SwitchPayloadRow, SwitchRecipientRow, SwitchRow } from '../src/db/schema.js';
-import { ApiError } from '../src/shared/errors.js';
+import type { SwitchActionRow, SwitchPayloadRow, SwitchRecipientRow, SwitchRow } from './db/schema.js';
+import { ApiError } from './shared/errors.js';
 import {
     EXPORT_FORMAT,
     EXPORT_SCHEMA_VERSION,
@@ -12,7 +12,7 @@ import {
     planImport,
     type ImportCheck,
     type ImportLookup,
-} from '../src/transfer.js';
+} from './transfer.js';
 
 /**
  * Switch export / import. These lock in the promises the public docs make: payloads
@@ -40,6 +40,7 @@ function switchRow(over: Partial<Full> = {}): Full {
         warnings: [{ offsetHours: 0, channels: ['push', 'email'] }],
         warningPhone: null,
         timezone: 'Europe/Kyiv',
+        locale: null,
         lastCheckinAt: T0,
         nextDeadline: T0,
         armedAt: T0,

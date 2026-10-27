@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { MIN_GRACE_HOURS, editedDeadline, effectiveGraceHours, graceEndsAt } from '../src/logic.js';
-import { createSwitchSchema } from '../src/schemas.js';
+import { MIN_GRACE_HOURS, editedDeadline, effectiveGraceHours, graceEndsAt } from './logic.js';
+import { createSwitchSchema } from './schemas.js';
 
 /**
  * The schedule rules that keep a switch from firing without its warnings: an edit

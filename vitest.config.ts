@@ -14,12 +14,12 @@ export default defineConfig({
             LOG_LEVEL: 'silent',
             NODE_ENV: 'test',
             TZ: 'UTC',
-            DOTENV_PATH: 'tests/.env.none',
+            DOTENV_PATH: 'src/test/.env.none',
             DATABASE_URL: 'postgres://test:test@127.0.0.1:5432/test',
             OWNER_TOKEN: 'test-owner-token-0123456789',
             PUBLIC_URL: 'https://core.example.com',
         },
-        include: ['tests/**/*.test.ts'],
+        include: ['src/**/*.test.ts'],
         testTimeout: 20_000,
         hookTimeout: 20_000,
         pool: 'forks',
@@ -28,6 +28,9 @@ export default defineConfig({
             provider: 'v8',
             include: ['src/**/*.ts'],
             exclude: [
+                // Test code itself — the tests next to the code and their helpers in src/test — as in the apps.
+                'src/**/*.test.ts',
+                'src/test/**',
                 // Process entry points with nothing of their own to test: `server.ts` only binds the
                 // port and wires the sweep interval and signal handlers around `buildApp()`, and
                 // `db/migrate.ts` runs the migrator against a live Postgres and exits. `buildApp()`,

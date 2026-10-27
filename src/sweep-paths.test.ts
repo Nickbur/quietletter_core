@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
-vi.mock('../src/db/client.js', () => import('./helpers/db.js').then((m) => m.pgliteClient()));
+vi.mock('./db/client.js', () => import('./test/db.js').then((m) => m.pgliteClient()));
 
 const h = vi.hoisted(() => ({
     env: {
@@ -12,18 +12,18 @@ const h = vi.hoisted(() => ({
     warningEmail: vi.fn(async (..._args: unknown[]) => {}),
     fireEmail: vi.fn(async (..._args: unknown[]) => {}),
 }));
-vi.mock('../src/env.js', () => ({ env: h.env }));
-vi.mock('../src/shared/email.service.js', () => ({ sendWarningEmail: h.warningEmail, sendFireEmail: h.fireEmail }));
+vi.mock('./env.js', () => ({ env: h.env }));
+vi.mock('./shared/email.service.js', () => ({ sendWarningEmail: h.warningEmail, sendFireEmail: h.fireEmail }));
 
-import { db } from '../src/db/client.js';
-import { publicPages, switches } from '../src/db/schema.js';
-import { checkinSwitch } from '../src/service.js';
-import { runSweep } from '../src/sweep.js';
-import { resetDb } from './helpers/db.js';
-import { at, seedSwitch, switchRow } from './helpers/switches.js';
+import { db } from './db/client.js';
+import { publicPages, switches } from './db/schema.js';
+import { checkinSwitch } from './service.js';
+import { runSweep } from './sweep.js';
+import { resetDb } from './test/db.js';
+import { at, seedSwitch, switchRow } from './test/switches.js';
 
 /**
- * The sweep's owner-warning channels and its race handling, beyond tests/sweep.test.ts: without
+ * The sweep's owner-warning channels and its race handling, beyond sweep.test.ts: without
  * OWNER_EMAIL the warning is still logged (never silently dropped), push and SMS are console-only
  * in the core, a failing channel never stops the sweep, and a switch the owner touched after the
  * sweep read it is skipped — never moved to grace, never fired.

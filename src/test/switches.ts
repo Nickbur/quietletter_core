@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { db } from '../../src/db/client.js';
+import { db } from '../db/client.js';
 import {
     switchActions,
     switchPayloads,
@@ -11,13 +11,13 @@ import {
     type SwitchRow,
     type SwitchState,
     type WarningStep,
-} from '../../src/db/schema.js';
-import { uuidv7 } from '../../src/shared/id.js';
+} from '../db/schema.js';
+import { uuidv7 } from '../shared/id.js';
 
 /**
  * Switch fixtures written straight into the database (bypassing the API), for tests that need a
  * switch in a given state — fired, in grace, legacy (no zone / language). Use it from a test file
- * that mocks `src/db/client.js` with `tests/helpers/db.ts`: the import below then resolves to that
+ * that mocks `src/db/client.js` with `src/test/db.ts`: the import below then resolves to that
  * in-process Postgres.
  */
 

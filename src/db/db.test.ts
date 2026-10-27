@@ -1,7 +1,7 @@
 import { getTableConfig, type PgTable } from 'drizzle-orm/pg-core';
 import pg from 'pg';
 import { afterAll, describe, expect, it } from 'vitest';
-import { db, pool, schema } from '../src/db/client.js';
+import { db, pool, schema } from './client.js';
 import {
     defaultCadence,
     defaultGrace,
@@ -13,8 +13,8 @@ import {
     switchPayloads,
     switchRecipients,
     switches,
-} from '../src/db/schema.js';
-import { env } from '../src/env.js';
+} from './schema.js';
+import { env } from '../env.js';
 
 /**
  * The real database client and the schema it is bound to. Loading the client must not open a

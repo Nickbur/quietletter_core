@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { ApiError, AuthError, ConflictError, NotFoundError, ValidationError } from '../src/shared/errors.js';
-import { escapeHtml, renderNotFoundPage, renderPublicPage, renderReleasePage } from '../src/shared/html.js';
-import { uuidv7 } from '../src/shared/id.js';
-import { isUniqueViolation, pgErrorCode } from '../src/shared/pgErrors.js';
-import { formatZonedTime, isRussian, isValidTimeZone } from '../src/shared/timezone.js';
+import { ApiError, AuthError, ConflictError, NotFoundError, ValidationError } from './errors.js';
+import { escapeHtml, renderNotFoundPage, renderPublicPage, renderReleasePage } from './html.js';
+import { uuidv7 } from './id.js';
+import { isUniqueViolation, pgErrorCode } from './pgErrors.js';
+import { formatZonedTime, isRussian, isValidTimeZone } from './timezone.js';
 
 /** The small shared helpers every route leans on: errors, ids, SQLSTATE reading, zones, HTML escaping. */
 

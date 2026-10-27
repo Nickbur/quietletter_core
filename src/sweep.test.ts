@@ -1,31 +1,23 @@
-import { fileURLToPath } from 'node:url';
 import { eq, sql } from 'drizzle-orm';
-import { migrate } from 'drizzle-orm/pglite/migrator';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * A real Postgres (PGlite, in-process) with the core's migrations applied, so the
  * sweep's SQL — the delivery ledger's unique index, `ON CONFLICT DO NOTHING`, the
  * compare-and-set transitions, the retention deletes — runs exactly as in production.
  */
-vi.mock('../src/db/client.js', async () => {
-    const { PGlite } = await import('@electric-sql/pglite');
-    const { drizzle } = await import('drizzle-orm/pglite');
-    const schema = await import('../src/db/schema.js');
-    const client = new PGlite();
-    return { db: drizzle(client, { schema }), pool: { end: async () => {} }, schema, pglite: client };
-});
+vi.mock('./db/client.js', () => import('./test/db.js').then((m) => m.pgliteClient()));
 
 const h = vi.hoisted(() => ({
     warningEmail: vi.fn(async (..._args: unknown[]) => {}),
     fireEmail: vi.fn(async (..._args: unknown[]) => {}),
 }));
-vi.mock('../src/env.js', () => ({
+vi.mock('./env.js', () => ({
     env: { PUBLIC_URL: 'https://core.example.com', FIRE_RETENTION_DAYS: 90, OWNER_EMAIL: 'owner@example.com' },
 }));
-vi.mock('../src/shared/email.service.js', () => ({ sendWarningEmail: h.warningEmail, sendFireEmail: h.fireEmail }));
+vi.mock('./shared/email.service.js', () => ({ sendWarningEmail: h.warningEmail, sendFireEmail: h.fireEmail }));
 
-import { db } from '../src/db/client.js';
+import { db } from './db/client.js';
 import {
     publicPages,
     releaseTokens,
@@ -35,12 +27,12 @@ import {
     switches,
     type GraceConfig,
     type WarningStep,
-} from '../src/db/schema.js';
-import { createSwitchSchema } from '../src/schemas.js';
-import { checkinSwitch, disarmSwitch, fillSwitchRegional, upsertSwitch } from '../src/service.js';
-import { ApiError } from '../src/shared/errors.js';
-import { uuidv7 } from '../src/shared/id.js';
-import { runSweep, transitionSwitch } from '../src/sweep.js';
+} from './db/schema.js';
+import { createSwitchSchema } from './schemas.js';
+import { checkinSwitch, disarmSwitch, fillSwitchRegional, upsertSwitch } from './service.js';
+import { ApiError } from './shared/errors.js';
+import { uuidv7 } from './shared/id.js';
+import { runSweep, transitionSwitch } from './sweep.js';
 
 /**
  * The fire engine of a dead man's switch: it must warn on time, never fire early (the
@@ -145,12 +137,8 @@ async function apiCode(fn: () => Promise<unknown>): Promise<string | undefined> 
     return undefined;
 }
 
-beforeAll(async () => {
-    await migrate(db, { migrationsFolder: fileURLToPath(new URL('../drizzle/migrations', import.meta.url)) });
-}, 60_000);
-
 afterAll(async () => {
-    const mod = (await import('../src/db/client.js')) as unknown as { pglite: { close: () => Promise<void> } };
+    const mod = (await import('./db/client.js')) as unknown as { pglite: { close: () => Promise<void> } };
     await mod.pglite.close();
 });
 

@@ -135,7 +135,7 @@ export function buildExportFile(
                 warningPhone: s.warningPhone ?? null,
                 timezone: s.timezone ?? null,
                 locale: s.locale ?? null,
-                lastCheckinAt: s.lastCheckinAt ? s.lastCheckinAt.toISOString() : null,
+                lastCheckinAt: s.lastCheckinAt.toISOString(),
                 createdAt: s.createdAt.toISOString(),
                 recipients: s.recipients.map((r) => ({
                     id: r.id,

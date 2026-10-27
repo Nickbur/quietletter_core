@@ -1,14 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../src/db/client.js', () => import('./helpers/db.js').then((m) => m.pgliteClient()));
+vi.mock('./db/client.js', () => import('./test/db.js').then((m) => m.pgliteClient()));
 
-import { db } from '../src/db/client.js';
-import { releaseTokens } from '../src/db/schema.js';
-import { getOrCreateReleaseToken, publishPublicPage } from '../src/service.js';
-import { buildTestApp } from './helpers/app.js';
-import { resetDb } from './helpers/db.js';
-import { ZK_FIELDS, at, seedSwitch } from './helpers/switches.js';
+import { db } from './db/client.js';
+import { releaseTokens } from './db/schema.js';
+import { getOrCreateReleaseToken, publishPublicPage } from './service.js';
+import { buildTestApp } from './test/app.js';
+import { resetDb } from './test/db.js';
+import { ZK_FIELDS, at, seedSwitch } from './test/switches.js';
 
 /**
  * The unauthenticated surfaces a recipient (or the public) reaches: the content-blind release

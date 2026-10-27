@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { MIN_GRACE_HOURS, dueWarnings, graceHours, shouldFire } from '../src/logic.js';
-import { createSwitchSchema, parse, putPayloadSchema, regionalSchema } from '../src/schemas.js';
-import { payloadAckDTO, switchDTO } from '../src/serializers.js';
-import type { SwitchWithChildren } from '../src/service.js';
-import { ValidationError } from '../src/shared/errors.js';
+import { MIN_GRACE_HOURS, dueWarnings, graceHours, shouldFire } from './logic.js';
+import { createSwitchSchema, parse, putPayloadSchema, regionalSchema } from './schemas.js';
+import { payloadAckDTO, switchDTO } from './serializers.js';
+import type { SwitchWithChildren } from './service.js';
+import { ValidationError } from './shared/errors.js';
 
 /**
  * Write validation (the same rules guard a regular save and an import) and the pure timing math

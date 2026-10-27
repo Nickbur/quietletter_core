@@ -2,13 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Force the SMTP path (dev mode would only print the text part) so the composed
 // message reaches the mocked transport. Nothing connects.
-vi.mock('../src/env.js', () => ({
+vi.mock('../env.js', () => ({
     env: { EMAIL_DEV_MODE: false, SMTP_HOST: 'smtp.test.invalid', SMTP_PORT: 587, MAIL_FROM: 'core@test.invalid' },
 }));
 const { sendMail } = vi.hoisted(() => ({ sendMail: vi.fn() }));
 vi.mock('nodemailer', () => ({ default: { createTransport: () => ({ sendMail }) } }));
 
-import { sendFireEmail, sendWarningEmail } from '../src/shared/email.service.js';
+import { sendFireEmail, sendWarningEmail } from './email.service.js';
 
 /** The core's emails print times on the switch's clock and are written in the switch's language. */
 

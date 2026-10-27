@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildApp } from '../src/app.js';
-import { ConflictError } from '../src/shared/errors.js';
+import { buildApp } from './app.js';
+import { ConflictError } from './shared/errors.js';
 
 /**
  * The server's error contract: every failure leaves as the flat `{ code, message }` the Quietletter

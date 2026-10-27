@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { buildApp } from '../../src/app.js';
-import { env } from '../../src/env.js';
+import { buildApp } from '../app.js';
+import { env } from '../env.js';
 
 /**
  * The real server (`buildApp()`), ready for `app.inject()`. Use it from a test file that mocks the

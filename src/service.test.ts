@@ -1,9 +1,9 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../src/db/client.js', () => import('./helpers/db.js').then((m) => m.pgliteClient()));
+vi.mock('./db/client.js', () => import('./test/db.js').then((m) => m.pgliteClient()));
 
-import { db } from '../src/db/client.js';
+import { db } from './db/client.js';
 import {
     publicPages,
     releaseTokens,
@@ -12,8 +12,8 @@ import {
     switchRecipients,
     switches,
     type SwitchActionRow,
-} from '../src/db/schema.js';
-import { createSwitchSchema } from '../src/schemas.js';
+} from './db/schema.js';
+import { createSwitchSchema } from './schemas.js';
 import {
     applySwitchImport,
     checkinSwitch,
@@ -23,12 +23,12 @@ import {
     planSwitchImport,
     publishPublicPage,
     upsertSwitch,
-} from '../src/service.js';
-import { ApiError } from '../src/shared/errors.js';
-import { uuidv7 } from '../src/shared/id.js';
-import type { ImportCandidate, ImportPlan } from '../src/transfer.js';
-import { resetDb } from './helpers/db.js';
-import { T0, at, seedSwitch, switchRow } from './helpers/switches.js';
+} from './service.js';
+import { ApiError } from './shared/errors.js';
+import { uuidv7 } from './shared/id.js';
+import type { ImportCandidate, ImportPlan } from './transfer.js';
+import { resetDb } from './test/db.js';
+import { T0, at, seedSwitch, switchRow } from './test/switches.js';
 
 /**
  * Service rules that are awkward to reach over HTTP: an import file that leaves config out gets

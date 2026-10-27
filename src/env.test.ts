@@ -47,7 +47,7 @@ afterEach(() => {
 async function loadEnv(vars: Record<string, string> = {}) {
     for (const [name, value] of Object.entries(vars)) vi.stubEnv(name, value);
     vi.resetModules();
-    return (await import('../src/env.js')).env;
+    return (await import('./env.js')).env;
 }
 
 describe('defaults', () => {

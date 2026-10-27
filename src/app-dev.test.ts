@@ -5,8 +5,8 @@ vi.hoisted(() => {
     process.env.NODE_ENV = 'development';
 });
 
-import { buildApp } from '../src/app.js';
-import { env } from '../src/env.js';
+import { buildApp } from './app.js';
+import { env } from './env.js';
 
 /**
  * A development instance asks for the pretty console logger only when the optional `pino-pretty`

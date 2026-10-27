@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { SwitchRecipientRow, SwitchRow } from '../src/db/schema.js';
-import { createSwitchSchema } from '../src/schemas.js';
-import { ApiError } from '../src/shared/errors.js';
+import type { SwitchRecipientRow, SwitchRow } from './db/schema.js';
+import { createSwitchSchema } from './schemas.js';
+import { ApiError } from './shared/errors.js';
 import {
     MAX_IMPORT_SWITCHES,
     buildExportFile,
@@ -10,10 +10,10 @@ import {
     parseExportFile,
     planImport,
     type ImportCandidate,
-} from '../src/transfer.js';
+} from './transfer.js';
 
 /**
- * Import validation, branch by branch (tests/transfer.test.ts covers the round trip). An uploaded
+ * Import validation, branch by branch (transfer.test.ts covers the round trip). An uploaded
  * file is untrusted input: anything malformed is reported per switch with a readable reason and
  * never sinks the valid switches next to it; the hosted service (allowPublicPage: false) skips a
  * switch carrying the self-host-only public page whole; a file timestamp that cannot be read is
@@ -221,7 +221,8 @@ describe('planning', () => {
 });
 
 describe('buildExportFile', () => {
-    it('writes null for a missing check-in time, phone or name', () => {
+    // A stored switch always has a check-in time (NOT NULL, set on create): only the optional fields can be missing.
+    it('writes null for a missing phone, zone, language or name', () => {
         const T = new Date('2026-10-09T12:00:00.000Z');
         const row = {
             id: SW,
@@ -233,7 +234,7 @@ describe('buildExportFile', () => {
             warningPhone: undefined,
             timezone: undefined,
             locale: undefined,
-            lastCheckinAt: null,
+            lastCheckinAt: T,
             createdAt: T,
             recipients: [
                 { id: RC, email: 'a@b.co', phone: undefined, name: undefined } as unknown as SwitchRecipientRow,
@@ -246,7 +247,7 @@ describe('buildExportFile', () => {
             warningPhone: null,
             timezone: null,
             locale: null,
-            lastCheckinAt: null,
+            lastCheckinAt: T.toISOString(),
             recipients: [{ id: RC, email: 'a@b.co', phone: null, name: null }],
         });
     });

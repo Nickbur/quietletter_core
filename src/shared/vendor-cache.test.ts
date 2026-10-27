@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const h = vi.hoisted(() => ({ readFile: vi.fn() }));
 vi.mock('node:fs/promises', () => ({ readFile: h.readFile }));
 
-import { vendorScript } from '../src/shared/vendor.js';
+import { vendorScript } from './vendor.js';
 
 /**
  * The release page's libsodium is read from node_modules once and then served from memory; a read

@@ -2,14 +2,14 @@ import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../src/db/client.js', () => import('./helpers/db.js').then((m) => m.pgliteClient()));
+vi.mock('./db/client.js', () => import('./test/db.js').then((m) => m.pgliteClient()));
 
-import { db } from '../src/db/client.js';
-import { switchActions, switchPayloads, switchRecipients, switches } from '../src/db/schema.js';
-import { uuidv7 } from '../src/shared/id.js';
-import { buildTestApp, ownerHeaders } from './helpers/app.js';
-import { resetDb } from './helpers/db.js';
-import { T0, ZK_FIELDS, at, seedSwitch, switchBody, switchRow } from './helpers/switches.js';
+import { db } from './db/client.js';
+import { switchActions, switchPayloads, switchRecipients, switches } from './db/schema.js';
+import { uuidv7 } from './shared/id.js';
+import { buildTestApp, ownerHeaders } from './test/app.js';
+import { resetDb } from './test/db.js';
+import { T0, ZK_FIELDS, at, seedSwitch, switchBody, switchRow } from './test/switches.js';
 
 /**
  * The owner API (`/v1/switches*`) end to end through the real server: the bearer gate, the wire

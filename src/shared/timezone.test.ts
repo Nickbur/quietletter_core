@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { computeNextDeadline } from '../src/logic.js';
-import { createSwitchSchema } from '../src/schemas.js';
-import { formatZonedTime, isValidTimeZone } from '../src/shared/timezone.js';
+import { computeNextDeadline } from '../logic.js';
+import { createSwitchSchema } from '../schemas.js';
+import { formatZonedTime, isValidTimeZone } from './timezone.js';
 
 /**
  * A switch's own IANA zone: validated on the way in, the cadence steps on its

@@ -1,12 +1,12 @@
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { resetDb } from './helpers/db.js';
+import { resetDb } from './test/db.js';
 
 const h = vi.hoisted(() => ({ poolEnd: vi.fn(async () => {}), client: undefined as Promise<object> | undefined }));
 // Every fresh module graph below gets the SAME in-process database (one PGlite per file, created
 // at import time): only the modules are re-evaluated, which is what decides `invokedDirectly`.
-vi.mock('../src/db/client.js', () => {
-    h.client ??= import('./helpers/db.js').then((m) => m.pgliteClient());
+vi.mock('./db/client.js', () => {
+    h.client ??= import('./test/db.js').then((m) => m.pgliteClient());
     return h.client.then((client) => ({ ...client, pool: { end: h.poolEnd } }));
 });
 
@@ -17,21 +17,21 @@ vi.mock('../src/db/client.js', () => {
  * prints the error and exits 1 so cron / the orchestrator sees it.
  */
 
-const SWEEP_PATH = fileURLToPath(new URL('../src/sweep.ts', import.meta.url));
+const SWEEP_PATH = fileURLToPath(new URL('./sweep.ts', import.meta.url));
 const originalEntry = process.argv[1];
 
-type DbModule = typeof import('../src/db/client.js');
-type SchemaModule = typeof import('../src/db/schema.js');
+type DbModule = typeof import('./db/client.js');
+type SchemaModule = typeof import('./db/schema.js');
 
-const { db: sharedDb } = await import('../src/db/client.js');
+const { db: sharedDb } = await import('./db/client.js');
 
 /** A fresh module graph (same database) with `argv[1]` set as the process entry. */
 async function freshGraph(entry: string | undefined): Promise<{ db: DbModule['db']; schema: SchemaModule }> {
     vi.resetModules();
     if (entry === undefined) process.argv.splice(1, 1);
     else process.argv[1] = entry;
-    const { db } = await import('../src/db/client.js');
-    const schema = await import('../src/db/schema.js');
+    const { db } = await import('./db/client.js');
+    const schema = await import('./db/schema.js');
     return { db, schema };
 }
 
@@ -73,7 +73,7 @@ describe('run directly', () => {
         const ended = deferred();
         h.poolEnd.mockImplementation(async () => ended.resolve());
 
-        await import('../src/sweep.js');
+        await import('./sweep.js');
         await ended.promise;
 
         expect(log).toHaveBeenCalledWith(
@@ -91,7 +91,7 @@ describe('run directly', () => {
             exited.resolve();
         }) as never);
 
-        await import('../src/sweep.js');
+        await import('./sweep.js');
         await exited.promise;
 
         expect(error).toHaveBeenCalledWith(
@@ -111,7 +111,7 @@ describe('imported', () => {
     ])('does not sweep when %s', async (_case, entry) => {
         const { db } = await freshGraph(entry);
         const scan = vi.spyOn(db.query.switches, 'findMany');
-        const mod = await import('../src/sweep.js');
+        const mod = await import('./sweep.js');
         expect(typeof mod.runSweep).toBe('function');
         expect(scan).not.toHaveBeenCalled();
         expect(h.poolEnd).not.toHaveBeenCalled();

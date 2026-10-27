@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { renderNotFoundPage, renderPublicPage, renderReleasePage } from '../src/shared/html.js';
-import { vendorScript } from '../src/shared/vendor.js';
+import { renderNotFoundPage, renderPublicPage, renderReleasePage } from './html.js';
+import { vendorScript } from './vendor.js';
 
 /**
  * The recipient release page decrypts in the browser with libsodium served by this
@@ -18,7 +18,7 @@ describe('vendored libsodium', () => {
     });
 
     it('serves nothing else', () => {
-        expect(vendorScript('../package.json')).toBeNull();
+        expect(vendorScript('../../package.json')).toBeNull();
         expect(vendorScript('constructor')).toBeNull();
         expect(vendorScript('sodium.js')).toBeNull();
     });
